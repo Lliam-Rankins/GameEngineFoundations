@@ -1,0 +1,3 @@
+/*
+	This is a header file that contains the function declarations for all functions in entities.cpp.
+*/
