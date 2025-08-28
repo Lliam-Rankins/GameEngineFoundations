@@ -1,0 +1,3 @@
+/*
+	This is a component file that manages entities.
+*/

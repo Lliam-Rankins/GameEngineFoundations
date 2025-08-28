@@ -39,7 +39,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "c:/Users/13366/source/repos/CSC481-581-M1/out/build/x64-Debug"
+			"value" : "c:/Users/13366/source/repos/CSC581-Project/out/build/x64-Debug"
 		},
 		{
 			"name" : "CMAKE_CACHE_MAJOR_VERSION",
@@ -467,7 +467,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/Users/13366/source/repos/CSC481-581-M1/out/build/x64-Debug/CMakeFiles/pkgRedirects"
+			"value" : "C:/Users/13366/source/repos/CSC581-Project/out/build/x64-Debug/CMakeFiles/pkgRedirects"
 		},
 		{
 			"name" : "CMAKE_GENERATOR",
@@ -527,7 +527,7 @@
 				}
 			],
 			"type" : "INTERNAL",
-			"value" : "C:/Users/13366/source/repos/CSC481-581-M1"
+			"value" : "C:/Users/13366/source/repos/CSC581-Project"
 		},
 		{
 			"name" : "CMAKE_INSTALL_PREFIX",
@@ -539,7 +539,7 @@
 				}
 			],
 			"type" : "PATH",
-			"value" : "C:/Users/13366/source/repos/CSC481-581-M1/out/install/x64-Debug"
+			"value" : "C:/Users/13366/Source/Repos/CSC581-Project/out/install/x64-Debug"
 		},
 		{
 			"name" : "CMAKE_LINKER",
@@ -1091,7 +1091,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/Users/13366/source/repos/CSC481-581-M1/out/build/x64-Debug"
+			"value" : "C:/Users/13366/source/repos/CSC581-Project/out/build/x64-Debug"
 		},
 		{
 			"name" : "FeelingLoopy_IS_TOP_LEVEL",
@@ -1115,7 +1115,7 @@
 				}
 			],
 			"type" : "STATIC",
-			"value" : "C:/Users/13366/source/repos/CSC481-581-M1"
+			"value" : "C:/Users/13366/source/repos/CSC581-Project"
 		},
 		{
 			"name" : "SDL3_DIR",
