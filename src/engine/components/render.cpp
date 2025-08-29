@@ -3,6 +3,8 @@
 */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3/SDL_scancode.h>
+#include "../headers/input.h"
 
 const int WINDOW_WIDTH = 512;  /*  Width of the game window to be created*/
 const int WINDOW_HEIGHT = 512; /*  Height of the game window to be created*/
@@ -63,6 +65,11 @@ int main(int argc, char* argv[])
             if (event.type == SDL_EVENT_QUIT) {
                 running = false;
             }
+            else if (event.type == SDL_EVENT_KEY_DOWN)
+                // Testing to allow the keypress of "q" to exit the window.
+                if (isKeyPressed(SDL_SCANCODE_Q)) {
+                    running = false;
+                }
         }
 
         // Update animation

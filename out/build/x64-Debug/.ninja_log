@@ -1,5 +1,5 @@
 # ninja log v5
-7	259	7780987788305327	CMakeFiles/main.dir/src/main.cpp.obj	23d8c26a2f1dbf0a
-15	277	7780989711311835	CMakeFiles/render.dir/src/engine/components/render.cpp.obj	6a1af1932e9d2c90
-262	1011	7780987789759300	main.exe	79f623ba8e8b34f9
-280	996	7780989712727676	render.exe	f1cfb67ada7e5e25
+14	277	7782040568742958	CMakeFiles/render.dir/src/engine/components/input.cpp.obj	d1b87413c072af16
+5	305	7782040568752962	CMakeFiles/render.dir/src/engine/components/render.cpp.obj	6a1af1932e9d2c90
+33	323	7782041188940377	CMakeFiles/render.dir/src/engine/components/input.cpp.obj	d1b87413c072af16
+324	1508	7782041191390554	render.exe	70a064c28e0c4023
