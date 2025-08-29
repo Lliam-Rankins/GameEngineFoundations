@@ -1,24 +1,28 @@
 /*
-	This is a component file that manages collisions.
+	This is a header file that contains the function declarations for all functions in collisions.cpp.
 */
-#include "collision.h"
+struct Collider {
+	// Top Left of Box
+	float x1;
+	float y1;
 
-public bool overlappingColliders(Collider a, Collider b) {
+	// Bottom Right of Box
+	float x2;
+	float y2;
 
-	bool overlappingX;
-
-	if ((a.x1 >= b.x1 && a.x1 <= b.x2) || (a.x2 >= b.x1 && a.x2 <= b.x2)) {
-		overlappingX = true;
+	// Default Constructor
+	Collider() {
+		x1 = 0;
+		y1 = 0;
+		x2 = 0;
+		y2 = 0;
 	}
-
-	bool overlappingY;
-
-	if ((a.y1 >= b.y1 && a.y1 <= b.y2) || (a.y2 >= b.y1 && a.y2 <= b.y2)) {
-		overlappingY = true;
+	Collider(float initx1, float inity1, float initx2, float inity2) {
+		x1 = initx1;
+		y1 = inity1;
+		x2 = initx2;
+		y2 = inity2;
 	}
+};
 
-	if (overlappingX && overlapinngY) {
-		return true;
-	}
-	return false;
-}
+bool overlappingColliders(Collider a, Collider b);
