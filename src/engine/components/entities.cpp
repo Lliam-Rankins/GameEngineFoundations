@@ -5,7 +5,14 @@
 #include "entity.h";
 #include <memory>;
 
-Entity* entity(OrderedPair pos, OrderedPair dim, SDL_Texture* texture) {
+// Empty Constructor
+Entity::Entity() {
+	Entity* e = new Entity();
+	return e;
+}
+
+// Full Constructor
+Entity::Entity(OrderedPair* pos, OrderedPair* dim, SDL_Texture* texture, bool physics, OrderedPair* velocity) {
 	Entity* e = new Entity();
 	
 	// Setting Position and Dimensions
@@ -15,6 +22,20 @@ Entity* entity(OrderedPair pos, OrderedPair dim, SDL_Texture* texture) {
 	// Setting Texture
 	e->texture = texture;
 
+	//  Setting if physics is applied to this object
+	e->physicsApplied = physics;
+
+	e->velocity = velocity;
 	
 	return e;
+}
+
+// Deconstructor
+Entity::~Entity() {
+	delete e->position;
+	delete e->dimensions;
+	delete e->texture;
+	delete e->velocity;
+
+	return;
 }

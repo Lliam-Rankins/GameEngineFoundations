@@ -13,7 +13,8 @@ class Entity {
     Entity();
 
     //Constructor (you may want a constructor which includes some arguments, like x,y position, texture file, etc.
-    Entity(OrderedPair*, OrderedPair*, SDL_Texture*);
+    // Position, Dimensions, Texture, Physics?, Velocity
+    Entity(OrderedPair*, OrderedPair*, SDL_Texture*, bool, OrderedPair*);
 
     //Destructor
     ~Entity();
@@ -34,11 +35,8 @@ class Entity {
     SDL_Texture* texture;
 
     //Use this or a similar function if you want to have an update function in each entity.
-    void update();
+    //void update();
 
 };
-
-// Entity Constructor
-Entity* entity(OrderedPair );
 
 #endif //ENTITIES_H
