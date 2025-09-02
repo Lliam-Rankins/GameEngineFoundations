@@ -2,40 +2,39 @@
 	This is a component file that manages entities.
 */
 
-#include "entity.h";
-#include <memory>;
+#include "../headers/entities.h"
+#include <SDL3/SDL.h>
 
-// Empty Constructor
-Entity::Entity() {
-	Entity* e = new Entity();
-	return e;
+/*
+ * --------------------AI USE CITATION---------------------
+ * AI was used to refactor the original code written for the constructors
+ * which cleaned bugs and followed best practices for constructors.
+ * - hplenham
+*/
+
+/*
+* Constructs an entity with default parameters.
+*/
+Entity::Entity()
+	: position{ 0, 0 }, dimensions{ 0, 0 }, velocity{ {0, 0}, 0 }, physicsApplied(false), texture(nullptr) {
 }
 
-// Full Constructor
-Entity::Entity(OrderedPair* pos, OrderedPair* dim, SDL_Texture* texture, bool physics, OrderedPair* velocity) {
-	Entity* e = new Entity();
-	
-	// Setting Position and Dimensions
-	e->position = pos;
-	e->dimensions = dim;
-
-	// Setting Texture
-	e->texture = texture;
-
-	//  Setting if physics is applied to this object
-	e->physicsApplied = physics;
-
-	e->velocity = velocity;
-	
-	return e;
+/*
+* Constructs an entity with full parameters.
+* @param pos the entity's position
+* @param dim the entity's dimensions
+* @param tex the SDL texture
+* @param physics whether or not physics is enabled for this entity
+* @param vel the entity's velocity
+*/
+Entity::Entity(const OrderedPair pos, const OrderedPair dim, SDL_Texture* tex, bool physics, const Velocity vel)
+	: position(pos), dimensions(dim), velocity(vel), physicsApplied(physics), texture(tex) {
 }
 
-// Deconstructor
+// Destructor
 Entity::~Entity() {
-	delete e->position;
-	delete e->dimensions;
-	delete e->texture;
-	delete e->velocity;
-
-	return;
+    if (texture) {
+        SDL_DestroyTexture(texture);
+        texture = nullptr;
+    }
 }
