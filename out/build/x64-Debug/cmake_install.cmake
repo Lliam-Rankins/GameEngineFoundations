@@ -1,8 +1,8 @@
-# Install script for directory: C:/Users/13366/source/repos/CSC581-Project
+# Install script for directory: C:/Users/lliam/OneDrive/Documents/Personal/School/GEF/Project
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "C:/Users/13366/Source/Repos/CSC581-Project/out/install/x64-Debug")
+  set(CMAKE_INSTALL_PREFIX "C:/Users/lliam/OneDrive/Documents/Personal/School/GEF/Project/out/install/x64-Debug")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -40,5 +40,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "C:/Users/13366/source/repos/CSC581-Project/out/build/x64-Debug/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "C:/Users/lliam/OneDrive/Documents/Personal/School/GEF/Project/out/build/x64-Debug/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

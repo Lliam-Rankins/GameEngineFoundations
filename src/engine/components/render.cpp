@@ -6,8 +6,8 @@
 #include <SDL3/SDL_scancode.h>
 #include "../headers/input.h"
 
-const int WINDOW_WIDTH = 512;  /*  Width of the game window to be created*/
-const int WINDOW_HEIGHT = 512; /*  Height of the game window to be created*/
+const int WINDOW_WIDTH = 1920;  /*  Width of the game window to be created*/
+const int WINDOW_HEIGHT = 1080; /*  Height of the game window to be created*/
 const int FRAME_COUNT = 8;     /*  Number of frames in the spritesheet */
 const int FRAME_WIDTH = 512;   /*  Width of the frame in the spritesheet */
 const int FRAME_HEIGHT = 512;  /*  Height of the frame in the spritesheet */
@@ -79,8 +79,8 @@ int main(int argc, char* argv[])
         // YOUR CODE HERE 
         // YOUR CODE HERE
 
-        // Set Background color to white
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        // Set Background color to "Air Force" blue
+        SDL_SetRenderDrawColor(renderer, 89, 139, 175, 255);
         // Clear screen
         SDL_RenderClear(renderer);
 

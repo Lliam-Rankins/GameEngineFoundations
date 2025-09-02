@@ -5,16 +5,37 @@
 #include "entity.h";
 #include <memory>;
 
-Entity* entity(float x1, float y1, float x2, float y2, enum ent_type type) {
-	Entity* e = new Entity;
-	e->x1 = x1;
-	e->y1 = y1;
-	e->x2 = x2;
-	e->y2 = y2;
-
-	e->xc = (x1 + x2) / 2;
-	e->yc = (y1 + y2) / 2;
-
-	e->type = type;
+// Empty Constructor
+Entity::Entity() {
+	Entity* e = new Entity();
 	return e;
+}
+
+// Full Constructor
+Entity::Entity(OrderedPair* pos, OrderedPair* dim, SDL_Texture* texture, bool physics, OrderedPair* velocity) {
+	Entity* e = new Entity();
+	
+	// Setting Position and Dimensions
+	e->position = pos;
+	e->dimensions = dim;
+
+	// Setting Texture
+	e->texture = texture;
+
+	//  Setting if physics is applied to this object
+	e->physicsApplied = physics;
+
+	e->velocity = velocity;
+	
+	return e;
+}
+
+// Deconstructor
+Entity::~Entity() {
+	delete e->position;
+	delete e->dimensions;
+	delete e->texture;
+	delete e->velocity;
+
+	return;
 }
