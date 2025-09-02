@@ -4,6 +4,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_scancode.h>
+#include <SDL3_image/SDL_image.h>
+#include "../headers/entities.h"
 #include "../headers/input.h"
 
 const int WINDOW_WIDTH = 1920;  /*  Width of the game window to be created*/
@@ -42,9 +44,10 @@ int main(int argc, char* argv[])
     // Load the texture from the assets folder
     AppState state;
 
-    /* Load the texture into state.Texture */
-    // YOUR CODE HERE 
+    
 
+    /* Load the texture into state.Texture */
+    state.Texture = IMG_LoadTexture(renderer, "darkworld_character_morwen_right.png");
     // Test to ensure texture was loaded
 
 
