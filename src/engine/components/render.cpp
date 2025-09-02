@@ -5,6 +5,7 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_scancode.h>
 #include <SDL3_image/SDL_image.h>
+#include <iostream>
 #include "../headers/entities.h"
 #include "../headers/input.h"
 
@@ -15,109 +16,92 @@ const int FRAME_WIDTH = 512;   /*  Width of the frame in the spritesheet */
 const int FRAME_HEIGHT = 512;  /*  Height of the frame in the spritesheet */
 const int ANIMATION_DELAY = 100;/* Number of iterations between the animation frames (determines delay) */
 
-/* Struct to store the current state*/
-struct AppState {
-    SDL_Texture* Texture = nullptr;
-    int currentFrame = 0;
-    Uint32 lastFrameTime = 0;
-};
-
 int main(int argc, char* argv[])
 {
-    // Initialize the SDL library
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-        SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
-        return 1;
-    }
+	// Initialize the SDL library
+	if (!SDL_Init(SDL_INIT_VIDEO)) {
+		SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
+		return 1;
+	}
 
-    // Create window and renderer
-    SDL_Window* window = nullptr;
-    SDL_Renderer* renderer = nullptr;
+	// Create window and renderer
+	SDL_Window* window = nullptr;
+	SDL_Renderer* renderer = nullptr;
 
-    // Initialize the window and renderer using SDL method
-    if (!SDL_CreateWindowAndRenderer("Feeling Loopy", WINDOW_WIDTH, WINDOW_HEIGHT, 0, &window, &renderer)) {
-        SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
-        SDL_Quit();
-        return 1;
-    }
+	// Initialize the window and renderer using SDL method
+	if (!SDL_CreateWindowAndRenderer("Project", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+		SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
+		SDL_Quit();
+		return 1;
+	}
 
-    // Load the texture from the assets folder
-    AppState state;
+	SDL_Surface* brickTexture = IMG_Load("media/brick.png");
+	if (!brickTexture) {
+		SDL_Log("Could not load image: %s", SDL_GetError());
+		SDL_DestroyRenderer(renderer);
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return 1;
+	}
 
-    
+	// Entity creation
+	OrderedPair pos{ WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 };
+	OrderedPair dim{ 100, 100 };
+	Velocity vel{ {0,0}, 0 };
 
-    /* Load the texture into state.Texture */
-    state.Texture = IMG_LoadTexture(renderer, "darkworld_character_morwen_right.png");
-    // Test to ensure texture was loaded
+	// Create the entity here:
 
+	// Main game loop condition variable
+	bool running = true;
 
-    state.currentFrame = 0;
-    state.lastFrameTime = 1;
+	// SDL_Event to capture event of window being closed
+	SDL_Event event;
 
-    // Main game loop condition variable
-    bool running = true;
+	// The main game loop
+	while (running) {
+		// Poll for events
+		while (SDL_PollEvent(&event)) {
 
-    // SDL_Event to capture event of window being closed
-    SDL_Event event;
+			// Read input from input manager
+			// If the event is close the window
+			if (event.type == SDL_EVENT_QUIT)
+				running = false;
 
-    // The main game loop
-    while (running) {
+			// Otherwise look for a key press
+			else if (event.type == SDL_EVENT_KEY_DOWN) {
+				// Testing to allow the keypress of "ESC" to exit the window.
+				if (isKeyPressed(SDL_SCANCODE_ESCAPE)) {
+					running = false;
+				}
+				if (isKeyPressed(SDL_SCANCODE_A)) {
+				}
+				if (isKeyPressed(SDL_SCANCODE_D)) {
+				}
+				if (isKeyPressed(SDL_SCANCODE_E)) {
+					// Spawn a box that falls onto the static platform based on keyboard input
+					// You'll need to detect and handle collisions as 
+				}
+				if (isKeyPressed(SDL_SCANCODE_GRAVE)) {
+					// Add logic to handle scaling
+				}
+			}
+		}
+		// Rendering
+		SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
+		SDL_RenderClear(renderer);
+		SDL_RenderPresent(renderer);
 
-        // Handle event of window close i.e. quit
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
-                running = false;
-            }
-            else if (event.type == SDL_EVENT_KEY_DOWN)
-                // Testing to allow the keypress of "q" to exit the window.
-                if (isKeyPressed(SDL_SCANCODE_Q)) {
-                    running = false;
-                }
-        }
+		// Set Background color to "Air Force" blue
+		SDL_SetRenderDrawColor(renderer, 89, 139, 175, 255);
 
-        // Update animation
-        state.lastFrameTime += 1;
+		// Clear screen
+		SDL_RenderClear(renderer);
 
-        // Change the frame if enough interations performed since the last
-        // YOUR CODE HERE 
-        // YOUR CODE HERE
+	}
 
-        // Set Background color to "Air Force" blue
-        SDL_SetRenderDrawColor(renderer, 89, 139, 175, 255);
-        // Clear screen
-        SDL_RenderClear(renderer);
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
 
-
-        // Draw the sprite onto the window
-
-        // Source (src) Rectangle is capturing the image from the spritesheet
-        SDL_FRect srcRect = { /* x(position), y(position), width, height */
-            (float)(state.currentFrame * FRAME_WIDTH),
-            0.0f,
-            (float)FRAME_WIDTH,
-            (float)FRAME_HEIGHT
-        };
-
-        // Destination (dst) Rectangle is drawing the image on the window
-        SDL_FRect dstRect = { /* x(position), y(position), width, height */
-            0.0f,
-            0.0f,
-            FRAME_WIDTH,
-            FRAME_HEIGHT
-        };
-
-        SDL_RenderTexture(renderer, state.Texture, &srcRect, &dstRect);
-
-        SDL_RenderPresent(renderer);
-    }
-
-    // Cleaning up the objects
-    if (state.Texture) {
-        SDL_DestroyTexture(state.Texture);
-    }
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-
-    return 0;
+	return 0;
 }
