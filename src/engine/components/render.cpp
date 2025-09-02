@@ -79,7 +79,7 @@ int main(int argc, char* argv[])
         // YOUR CODE HERE 
         // YOUR CODE HERE
 
-        // Set Background color to white
+        // Set Background color to "Air Force" blue
         SDL_SetRenderDrawColor(renderer, 89, 139, 175, 255);
         // Clear screen
         SDL_RenderClear(renderer);
