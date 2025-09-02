@@ -5,16 +5,16 @@
 #include "entity.h";
 #include <memory>;
 
-Entity* entity(float x1, float y1, float x2, float y2, enum ent_type type) {
-	Entity* e = new Entity;
-	e->x1 = x1;
-	e->y1 = y1;
-	e->x2 = x2;
-	e->y2 = y2;
+Entity* entity(OrderedPair pos, OrderedPair dim, SDL_Texture* texture) {
+	Entity* e = new Entity();
+	
+	// Setting Position and Dimensions
+	e->position = pos;
+	e->dimensions = dim;
 
-	e->xc = (x1 + x2) / 2;
-	e->yc = (y1 + y2) / 2;
+	// Setting Texture
+	e->texture = texture;
 
-	e->type = type;
+	
 	return e;
 }

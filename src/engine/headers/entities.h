@@ -5,23 +5,24 @@
 #ifndef ENTITIES_H
 #define ENTITIES_H
 
-// Entity Type Enum
-enum ent_Type {
-	Static,
-	Moving,
-	Controlled
-};
+#include <SDL3/SDL_render.h>
 
 class Entity {
     public:
     //Constructor (you may want a constructor which includes some arguments, like x,y position, texture file, etc.
     Entity();
+
+    //Constructor (you may want a constructor which includes some arguments, like x,y position, texture file, etc.
+    Entity(OrderedPair*, OrderedPair*, SDL_Texture*);
+
     //Destructor
     ~Entity();
 
     //Ordered pairs denoting location and dimensions. Leave null if the entity doesn't need a location or dimension.
     //Alternatively, you may want to eliminate pointers so the structs are stored within the entity itself instead of in separate memory.
+    //Entity's bottom right point
     OrderedPair* position;
+    //Distance up and left to top left point
     OrderedPair* dimensions;
 
     //Velocity containing direction and magnitude
@@ -29,13 +30,15 @@ class Entity {
     //denotes if physics is applied to the entity
     bool physicsApplied;
 
+    // Entity Texture
+    SDL_Texture* texture;
+
     //Use this or a similar function if you want to have an update function in each entity.
     void update();
 
-    //Include SDL Textures inside the Entity class
 };
 
 // Entity Constructor
-Entity* entity(float x1, float y1, float x2, float y2, float ent_type type);
+Entity* entity(OrderedPair );
 
 #endif //ENTITIES_H
