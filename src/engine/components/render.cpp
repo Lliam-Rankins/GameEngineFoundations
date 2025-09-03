@@ -35,14 +35,16 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	SDL_Surface* brickTexture = IMG_Load("media/brick.png");
-	if (!brickTexture) {
-		SDL_Log("Could not load image: %s", SDL_GetError());
-		SDL_DestroyRenderer(renderer);
-		SDL_DestroyWindow(window);
-		SDL_Quit();
-		return 1;
-	}
+	// SDL_Surface* brickSurface = IMG_Load("media/brick.png");
+	// if (!brickTexture) {
+	// 	SDL_Log("Could not load image: %s", SDL_GetError());
+	// 	SDL_DestroyRenderer(renderer);
+	// 	SDL_DestroyWindow(window);
+	// 	SDL_Quit();
+	// 	return 1;
+	// }
+
+	SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "media/brick.png");
 
 	// Entity creation
 	OrderedPair pos{ WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 };
@@ -89,13 +91,15 @@ int main(int argc, char* argv[])
 		// Rendering
 		SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
 		SDL_RenderClear(renderer);
-		SDL_RenderPresent(renderer);
+		//SDL_RenderPresent(renderer);
 
 		// Set Background color to "Air Force" blue
-		SDL_SetRenderDrawColor(renderer, 89, 139, 175, 255);
-
+		//SDL_SetRenderDrawColor(renderer, 89, 139, 175, 255);
+		SDL_FRect destRect = { 0, 0, 350, 100 };
+    	SDL_RenderTexture(renderer, brickTexture, NULL, &destRect);
 		// Clear screen
-		SDL_RenderClear(renderer);
+		//SDL_RenderClear(renderer);
+		SDL_RenderPresent(renderer);
 
 	}
 

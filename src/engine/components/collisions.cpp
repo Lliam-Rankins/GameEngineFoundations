@@ -1,7 +1,7 @@
 /*
 	This is a component file that manages collisions.
 */
-#include "collision.h"
+#include "collisions.h"
 
 /**
   This function takes in two colliders and provides a bool value depending on if they are overlapping or not.
@@ -13,13 +13,13 @@ bool overlappingColliders(Collider a, Collider b) {
 	// Check if x values for a and b overlap at all
 	bool overlappingX = false;
 
-	if (a.x1 < b.x2 && a.x2 > b.x1) {
+	if (a.topLeft.x < b.bottomRight.x && a.bottomRight.x > b.topLeft.x) {
 		overlappingX = true;
 	}
 	// Check if y values for a and b overlap at all
 	bool overlappingY = false;
 
-	if (a.y1 < b.y2 && a.y2 > a.b1) {
+	if (a.topLeft.y < b.bottomRight.y && a.bottomRight.y > b.topLeft.y) {
 		overlappingY = true;
 	}
 
