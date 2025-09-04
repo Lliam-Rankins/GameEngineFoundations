@@ -35,15 +35,6 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	// SDL_Surface* brickSurface = IMG_Load("media/brick.png");
-	// if (!brickTexture) {
-	// 	SDL_Log("Could not load image: %s", SDL_GetError());
-	// 	SDL_DestroyRenderer(renderer);
-	// 	SDL_DestroyWindow(window);
-	// 	SDL_Quit();
-	// 	return 1;
-	// }
-
 	SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "media/brick.png");
 
 	// Entity creation
@@ -51,18 +42,36 @@ int main(int argc, char* argv[])
 	OrderedPair dim{ 100, 100 };
 	Velocity vel{ {0,0}, 0 };
 
-	// Create the entity here:
-
 	// Main game loop condition variable
 	bool running = true;
 
 	// SDL_Event to capture event of window being closed
 	SDL_Event event;
 
+	// Scaling Type bool
+	bool constantSizeScale = true;
+
 	// The main game loop
 	while (running) {
 		// Poll for events
 		while (SDL_PollEvent(&event)) {
+
+			// If event is Window Resize
+			if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+				// Constant Scaling
+				if (constantSizeScale) {
+					// Resize as if the screen was still the same
+					SDL_SetRenderLogicalPresentation(renderer, 1920, 1080, SDL_LOGICAL_PRESENTATION_STRETCH);
+				}
+				// Proportional Scaling
+				else {
+					//Get Window Size
+					int w, h;
+					SDL_GetWindowSize(window, &w, &h);
+					// Resize as if the screen was still the same
+					SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
+				}	
+			}
 
 			// Read input from input manager
 			// If the event is close the window
@@ -84,7 +93,7 @@ int main(int argc, char* argv[])
 					// You'll need to detect and handle collisions as 
 				}
 				if (isKeyPressed(SDL_SCANCODE_GRAVE)) {
-					// Add logic to handle scaling
+					constantSizeScale = !constantSizeScale;
 				}
 			}
 		}
