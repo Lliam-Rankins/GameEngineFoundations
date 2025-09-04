@@ -7,6 +7,7 @@
 
 #include <SDL3/SDL_render.h>
 #include "struct.h"
+#include "collisions.h"
 
 class Entity {
 public:
@@ -15,10 +16,13 @@ public:
 
 	//Constructor (you may want a constructor which includes some arguments, like x,y position, texture file, etc.
 	// Position, Dimensions, Texture, Physics?, Velocity
-	Entity(const OrderedPair position, const OrderedPair dimension, SDL_Texture* texture, bool physics, const Velocity vel);
+	Entity(const Vector position, const Vector dimension, SDL_Texture* texture, bool physics, const Vector vel);
 
 	//Destructor
 	~Entity();
+
+	// Sets the collider for this entity, optional
+	void setCollider(Collider *newCollider);
 
 	/*
 	 * --------------------AI USE CITATION---------------------
@@ -33,13 +37,13 @@ public:
 	Entity& operator=(Entity&&) noexcept = default;
 
 	// Entity's bottom right point
-	OrderedPair position;
+	Vector position;
 
 	// Distance up and left to top left point
-	OrderedPair dimensions;
+	Vector dimensions;
 
 	// Velocity containing direction and magnitude
-	Velocity velocity;
+	Vector velocity;
 
 	// Denotes if physics is applied to the entity - false by default.
 	bool physicsApplied = false;
@@ -47,8 +51,11 @@ public:
 	// Entity Texture - null by default.
 	SDL_Texture* texture = nullptr;
 
+	// Entity's collider, defaults as null
+	Collider* collider = nullptr;
+
 	// Use this or a similar function if you want to have an update function in each entity.
-	//void update();
+	void updatePosition();
 
 };
 

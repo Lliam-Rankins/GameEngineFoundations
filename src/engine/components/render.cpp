@@ -1,46 +1,56 @@
 /*
 	This is a component file that outlines and implements rendering.
 */
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
-#include <SDL3/SDL_scancode.h>
-#include <SDL3_image/SDL_image.h>
-#include <iostream>
-#include "../headers/entities.h"
-#include "../headers/input.h"
+#include "../headers/render.h"
 
-const int WINDOW_WIDTH = 1920;  /*  Width of the game window to be created*/
-const int WINDOW_HEIGHT = 1080; /*  Height of the game window to be created*/
-const int FRAME_COUNT = 8;     /*  Number of frames in the spritesheet */
-const int FRAME_WIDTH = 512;   /*  Width of the frame in the spritesheet */
-const int FRAME_HEIGHT = 512;  /*  Height of the frame in the spritesheet */
-const int ANIMATION_DELAY = 100;/* Number of iterations between the animation frames (determines delay) */
+void initializeSDL() {
+	if (!SDL_Init(SDL_INIT_VIDEO)) {
+		SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
+		exit(1);
+	}
+}
+
+void createWindowAndRenderer() {
+	if (!SDL_CreateWindowAndRenderer("Project", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+		SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
+		SDL_Quit();
+		exit(1);
+	}
+}
+
+void setupScreen() {
+	SDL_SetRenderDrawColor(renderer, 89, 139, 175, 255);
+	SDL_RenderClear(renderer);
+	
+}
+
+void refreshScreen() {
+	SDL_RenderPresent(renderer);
+}
+
 
 int main(int argc, char* argv[])
 {
 	// Initialize the SDL library
-	if (!SDL_Init(SDL_INIT_VIDEO)) {
-		SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
-		return 1;
-	}
-
-	// Create window and renderer
-	SDL_Window* window = nullptr;
-	SDL_Renderer* renderer = nullptr;
+	initializeSDL();
 
 	// Initialize the window and renderer using SDL method
-	if (!SDL_CreateWindowAndRenderer("Project", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE, &window, &renderer)) {
-		SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
+	createWindowAndRenderer();
+	
+
+	SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "media/brick.png");
+	if (!brickTexture) {
+		SDL_Log("Culd not load image: %s", SDL_GetError());
+		SDL_DestroyRenderer(renderer);
+		SDL_DestroyWindow(window);
 		SDL_Quit();
 		return 1;
 	}
 
-	SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "media/brick.png");
-
 	// Entity creation
-	OrderedPair pos{ WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 };
-	OrderedPair dim{ 100, 100 };
-	Velocity vel{ {0,0}, 0 };
+	Vector pos{ WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 };
+	Vector dim{ 100, 100 };
+	Vector vel{0,0};
 
 	// Main game loop condition variable
 	bool running = true;
@@ -98,8 +108,7 @@ int main(int argc, char* argv[])
 			}
 		}
 		// Rendering
-		SDL_SetRenderDrawColor(renderer, 30, 30, 30, 255);
-		SDL_RenderClear(renderer);
+		setupScreen();
 		//SDL_RenderPresent(renderer);
 
 		// Set Background color to "Air Force" blue
@@ -108,7 +117,8 @@ int main(int argc, char* argv[])
     	SDL_RenderTexture(renderer, brickTexture, NULL, &destRect);
 		// Clear screen
 		//SDL_RenderClear(renderer);
-		SDL_RenderPresent(renderer);
+		
+		refreshScreen();
 
 	}
 
