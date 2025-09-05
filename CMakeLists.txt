@@ -1,10 +1,20 @@
 cmake_minimum_required(VERSION 3.10)
-project(FeelingLoopy)
+project(Project)
 
 set(CMAKE_CXX_STANDARD 17)
 
 find_package(SDL3 REQUIRED)
+find_package(SDL3_image REQUIRED)
 
-add_executable(main ./src/main.cpp)
+add_executable(render ./src/engine/components/render.cpp ./src/engine/components/input.cpp ./src/engine/components/entities.cpp)
+set(MEDIA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/media")
+set(MEDIA_DEST_DIR "${CMAKE_BINARY_DIR}/media")
 
-target_link_libraries(main PRIVATE SDL3::SDL3)
+add_custom_command(
+    TARGET render POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${MEDIA_SOURCE_DIR}"
+    "${MEDIA_DEST_DIR}"
+)
+
+target_link_libraries(render PRIVATE SDL3::SDL3 SDL3_image::SDL3_image)
