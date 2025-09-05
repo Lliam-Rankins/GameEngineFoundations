@@ -19,15 +19,12 @@ const int FRAME_WIDTH = 512;   /*  Width of the frame in the spritesheet */
 const int FRAME_HEIGHT = 512;  /*  Height of the frame in the spritesheet */
 const int ANIMATION_DELAY = 100;/* Number of iterations between the animation frames (determines delay) */
 
-SDL_Window* window = nullptr;
-SDL_Renderer* renderer = nullptr;
-
 void initializeSDL();
 
-void createWindowAndRenderer();
+void createWindowAndRenderer(SDL_Window **window, SDL_Renderer **renderer);
 
-void setupScreen();
+void setupScreen(SDL_Renderer *renderer);
 
-void refreshScreen();
+void refreshScreen(SDL_Renderer *renderer);
 
 #endif
