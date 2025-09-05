@@ -1,7 +1,7 @@
 /*
 	This is a component file that manages collisions.
 */
-#include "collisions.h"
+#include "../headers/collisions.h"
 
 /**
   This function takes in two colliders and provides a bool value depending on if they are overlapping or not.

@@ -2,6 +2,8 @@
 	This is a component file that outlines and implements rendering.
 */
 #include "../headers/render.h"
+#include "../headers/physics.h"
+#include "../headers/collisions.h"
 
 void initializeSDL() {
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -28,6 +30,18 @@ void refreshScreen() {
 	SDL_RenderPresent(renderer);
 }
 
+void renderEntity(SDL_Renderer* renderer, const Entity& e) {
+    SDL_FRect rect = { e.position.x - e.dimensions.x / 2.0f, e.position.y - e.dimensions.y / 2.0f, e.dimensions.x, e.dimensions.y };
+    SDL_RenderTexture(renderer, e.texture, NULL, &rect);
+}
+
+int textureError(){
+	SDL_Log("Could not load image: %s", SDL_GetError());
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
+	return 1;
+}
 
 int main(int argc, char* argv[])
 {
@@ -37,20 +51,44 @@ int main(int argc, char* argv[])
 	// Initialize the window and renderer using SDL method
 	createWindowAndRenderer();
 	
+	// Don't show the player initially
+	bool showPlayer= false;
 
-	SDL_Texture* brickTexture = IMG_LoadTexture(renderer, "media/brick.png");
-	if (!brickTexture) {
-		SDL_Log("Culd not load image: %s", SDL_GetError());
-		SDL_DestroyRenderer(renderer);
-		SDL_DestroyWindow(window);
-		SDL_Quit();
-		return 1;
+	SDL_Texture* platformTexture = IMG_LoadTexture(renderer, "media/warped city files/warped city files/Assets/ENVIRONMENT/props/control-box-3.png");
+	if (!platformTexture) {
+		textureError();
 	}
+	SDL_Texture* playerTexture = IMG_LoadTexture(renderer, "media/warped city files/warped city files/Assets/SPRITES/player/idle/idle-1.png");
 
-	// Entity creation
-	Vector pos{ WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 };
-	Vector dim{ 100, 100 };
-	Vector vel{0,0};
+	Vector platPos = { WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 };
+	Vector platDim = { 62, 30 };
+	Vector vel = { 0, 0 };
+
+	Entity platform(platPos, platDim, platformTexture, false, vel);
+	// Create a collider for the platform
+	Collider platformCollider(
+		platPos.x - platDim.x / 2.0f,
+		platPos.y - platDim.y / 2.0f,
+		platPos.x + platDim.x / 2.0f,
+		platPos.y + platDim.y / 2.0f
+	);
+	platform.setCollider(&platformCollider);
+
+	Vector playerPos = { WINDOW_WIDTH / 2, platPos.y - 100};
+	Vector playerDim = { 71, 67 };
+	vel = { 0, 0 };
+
+	Entity player(playerPos, playerDim, playerTexture, true, vel);
+
+	Collider playerCollider(
+		playerPos.x - playerDim.x / 2.0f,
+		playerPos.y - playerDim.y / 2.0f,
+		playerPos.x + playerDim.x / 2.0f,
+		playerPos.y + playerDim.y / 2.0f
+	);
+
+	player.setCollider(&playerCollider);
+
 
 	// Main game loop condition variable
 	bool running = true;
@@ -63,6 +101,7 @@ int main(int argc, char* argv[])
 
 	// The main game loop
 	while (running) {
+
 		// Poll for events
 		while (SDL_PollEvent(&event)) {
 
@@ -95,29 +134,58 @@ int main(int argc, char* argv[])
 					running = false;
 				}
 				if (isKeyPressed(SDL_SCANCODE_A)) {
+					player.velocity = { -1, 0 };
+					player.updatePosition();
 				}
 				if (isKeyPressed(SDL_SCANCODE_D)) {
+					player.velocity = { 1, 0 };
+					player.updatePosition();
 				}
 				if (isKeyPressed(SDL_SCANCODE_E)) {
-					// Spawn a box that falls onto the static platform based on keyboard input
-					// You'll need to detect and handle collisions as 
+					// Render the player
+					showPlayer = !showPlayer;
+					player.position = { WINDOW_WIDTH / 2.0f, platPos.y - 300.0f }; // Reset position.
+                    player.velocity = { 0, 0 }; // Reset velocity.
 				}
 				if (isKeyPressed(SDL_SCANCODE_GRAVE)) {
 					constantSizeScale = !constantSizeScale;
+				}
+				if (isKeyPressed(SDL_SCANCODE_SPACE)) {
+					player.velocity = {0, -30};
+					player.updatePosition();
 				}
 			}
 		}
 		// Rendering
 		setupScreen();
-		//SDL_RenderPresent(renderer);
 
-		// Set Background color to "Air Force" blue
-		//SDL_SetRenderDrawColor(renderer, 89, 139, 175, 255);
-		SDL_FRect destRect = { 0, 0, 350, 100 };
-    	SDL_RenderTexture(renderer, brickTexture, NULL, &destRect);
-		// Clear screen
-		//SDL_RenderClear(renderer);
-		
+		// Render the platform
+		renderEntity(renderer, platform);
+
+		if (player.physicsApplied) {
+			player.velocity.y += Physics::getGravity();
+		}
+
+		player.position.y += player.velocity.y;
+
+		// Update collider to match new position
+		player.collider->topLeft.y = player.position.y - player.dimensions.y / 2.0f;
+		player.collider->bottomRight.y = player.position.y + player.dimensions.y / 2.0f;
+
+		// Collision check
+		if (overlappingColliders(*player.collider, *platform.collider)) {
+			if (player.velocity.y > 0) {
+				player.position.y = platform.position.y - platform.dimensions.y / 2.0f - player.dimensions.y / 2.0f;
+				player.collider->topLeft.y = player.position.y - player.dimensions.y / 2.0f;
+				player.collider->bottomRight.y = player.position.y + player.dimensions.y / 2.0f;
+				player.velocity.y = 0;
+			}
+		}
+
+		if (showPlayer) {
+        	renderEntity(renderer, player);
+    	}
+
 		refreshScreen();
 
 	}

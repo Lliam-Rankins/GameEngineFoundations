@@ -3,7 +3,6 @@
 */
 #ifndef PHYSICS_H
 #define PHYSICS_H
-#endif
 
 class Physics {
     public:
@@ -15,3 +14,5 @@ class Physics {
     private:
     static int gravityWeight;
 };
+
+#endif

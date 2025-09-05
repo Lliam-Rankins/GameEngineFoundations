@@ -30,4 +30,6 @@ void setupScreen();
 
 void refreshScreen();
 
+void renderEntity(SDL_Renderer* renderer, const Entity& e);
+
 #endif
