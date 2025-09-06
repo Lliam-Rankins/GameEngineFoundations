@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(SDL3 REQUIRED)
 find_package(SDL3_image REQUIRED)
 
-add_executable(main ./src/game/main.cpp ./src/engine/components/render.cpp ./src/engine/components/input.cpp ./src/engine/components/entities.cpp ./src/engine/components/physics.cpp)
+add_executable(main ./src/game/main.cpp ./src/engine/components/render.cpp ./src/engine/components/input.cpp ./src/engine/components/entities.cpp ./src/engine/components/physics.cpp ./src/engine/components/collisions.cpp)
 set(MEDIA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/media")
 set(MEDIA_DEST_DIR "${CMAKE_BINARY_DIR}/media")
 

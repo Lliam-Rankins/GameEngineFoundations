@@ -48,10 +48,9 @@ void Entity::updatePosition() {
     this->position.y += this->velocity.y;
 
     if(this->collider != nullptr) {
-        this->collider->topLeft.x += this->velocity.x;
-        this->collider->bottomRight.x += this->velocity.x;
-
-        this->collider->topLeft.y += this->velocity.y;
-        this->collider->bottomRight.y += this->velocity.y;
+        this->collider->topLeft.x = this->position.x;
+    	this->collider->topLeft.y = this->position.y;
+    	this->collider->bottomRight.x = this->position.x + this->dimensions.x;
+    	this->collider->bottomRight.y = this->position.y + this->dimensions.y;
     }
 }

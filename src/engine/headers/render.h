@@ -12,6 +12,7 @@
 #include "../headers/entities.h"
 #include "../headers/input.h"
 
+
 const int WINDOW_WIDTH = 1920;  /*  Width of the game window to be created*/
 const int WINDOW_HEIGHT = 1080; /*  Height of the game window to be created*/
 const int FRAME_COUNT = 8;     /*  Number of frames in the spritesheet */
