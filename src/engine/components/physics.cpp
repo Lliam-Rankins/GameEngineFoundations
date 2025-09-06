@@ -3,4 +3,4 @@
 */
 #include "../headers/physics.h"
 
-int Physics::gravityWeight = 5;
+int WorldPhysics::gravityWeight = 5;
