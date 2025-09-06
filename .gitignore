@@ -1,2 +1,5 @@
 .vs/*
 out/*
+build/*
+media/*
+src/game/*
