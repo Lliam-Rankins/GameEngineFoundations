@@ -44,13 +44,17 @@ void Entity::setCollider(Collider *newCollider) {
 }
 
 void Entity::updatePosition() {
+    // Apply velocity to position
     this->position.x += this->velocity.x;
     this->position.y += this->velocity.y;
 
-    if(this->collider != nullptr) {
-        this->collider->topLeft.x = this->position.x;
-    	this->collider->topLeft.y = this->position.y;
-    	this->collider->bottomRight.x = this->position.x + this->dimensions.x;
-    	this->collider->bottomRight.y = this->position.y + this->dimensions.y;
+    // Sync collider with new position (center-based)
+    if (this->collider != nullptr) {
+        this->collider->topLeft.x     = this->position.x - this->dimensions.x / 2.0f;
+        this->collider->topLeft.y     = this->position.y - this->dimensions.y / 2.0f;
+        this->collider->bottomRight.x = this->position.x + this->dimensions.x / 2.0f;
+        this->collider->bottomRight.y = this->position.y + this->dimensions.y / 2.0f;
     }
 }
+
+
