@@ -3,7 +3,6 @@
 */
 #ifndef COLLISIONS_H
 #define COLLISIONS_H
-#endif
 
 #include "mathEngine.h"
 struct Collider {
@@ -29,3 +28,5 @@ struct Collider {
 };
 // This function returns true if two colliders are overlapping, false otherwise
 bool overlappingColliders(Collider a, Collider b);
+
+#endif // COLLISIONS_H
