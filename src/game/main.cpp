@@ -20,11 +20,11 @@ Vector defaultVel = {0, 0};
 
 
 // Game Vars
-float playerSpeed = 5.0;
-float playerJumpSpeed = 50.0;
+float playerSpeed = 1.0;
+float playerJumpSpeed = 2.5;
 float movingPlatSpeed = .5;
 
-int gravity = 1;
+int gravity = 2;
 
 
 //////////////////////////////////////////////////
@@ -151,24 +151,6 @@ int main(int argc, char* argv[])
 					running = false;
 				}
 
-				// Player Movement
-				if (isKeyPressed(SDL_SCANCODE_W) || isKeyPressed(SDL_SCANCODE_SPACE)) {	// Jump
-						player.velocity.y = -playerJumpSpeed;
-						player.updatePosition();
-				}
-				if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
-					player.velocity.x = -playerSpeed;
-					player.updatePosition();
-				}
-				if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
-					player.velocity.y = playerSpeed;
-					player.updatePosition();
-				}
-				if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
-					player.velocity.x = playerSpeed;
-					player.updatePosition();
-				}
-
 				// Change Scaling Mode
 				if (isKeyPressed(SDL_SCANCODE_GRAVE)) {									// Change Scaling Mode
 					constantSizeScale = !constantSizeScale;
@@ -182,24 +164,46 @@ int main(int argc, char* argv[])
 		//
 		//////////////////////////////////////////////////
 
-		// Player Gravity
-		player.velocity = {0, 0};
-		player.velocity.y = WorldPhysics::getGravity();
-		
-		// Check if player is coliding with anything
-		if (overlappingColliders(*player.collider, *platform_1.collider) || overlappingColliders(*player.collider, *movingPlat_1.collider)) {
-			player.velocity = {0, 0};
-		}
-
-		player.updatePosition();
-		player.velocity = {0, 0};
-
 		// Update moving platforms position
 		if (movingPlat_1.position.x > movingPlatPos_1.x + 100) movingPlat_1.velocity.x = -movingPlatSpeed;
 		if (movingPlat_1.position.x < movingPlatPos_1.x - 100) movingPlat_1.velocity.x = movingPlatSpeed;
 		movingPlat_1.updatePosition();
 
 		platform_1.updatePosition();
+
+
+		//////////////////////////////////////////////////
+		//
+		// Player Movement
+		//
+		//////////////////////////////////////////////////
+		// Player Movement
+		if (isKeyPressed(SDL_SCANCODE_W) || isKeyPressed(SDL_SCANCODE_SPACE)) {	// Jump
+				player.velocity.y = -playerJumpSpeed;
+				player.updatePosition();
+		}
+		if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
+			player.velocity.x = -playerSpeed;
+			player.updatePosition();
+		}
+		if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
+			player.velocity.y = playerSpeed;
+			player.updatePosition();
+		}
+		if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
+			player.velocity.x = playerSpeed;
+			player.updatePosition();
+		}
+
+		
+		
+		// Check if player is coliding with anything
+		if (!overlappingColliders(*player.collider, *platform_1.collider) && !overlappingColliders(*player.collider, *movingPlat_1.collider)) {
+			player.velocity.y += WorldPhysics::getGravity();
+		}
+
+		player.updatePosition();
+		player.velocity = {0, 0};
 
 		//////////////////////////////////////////////////
 		//
