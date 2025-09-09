@@ -17,13 +17,15 @@ int textureError()
 	return 1;
 }
 
-void SyncColliderToEntity(Entity& entity) {
-    if (entity.collider) {
-        entity.collider->topLeft.x = entity.position.x - entity.dimensions.x / 2.0f;
-        entity.collider->topLeft.y = entity.position.y - entity.dimensions.y / 2.0f;
-        entity.collider->bottomRight.x = entity.position.x + entity.dimensions.x / 2.0f;
-        entity.collider->bottomRight.y = entity.position.y + entity.dimensions.y / 2.0f;
-    }
+void SyncColliderToEntity(Entity &entity)
+{
+	if (entity.collider)
+	{
+		entity.collider->topLeft.x = entity.position.x - entity.dimensions.x / 2.0f;
+		entity.collider->topLeft.y = entity.position.y - entity.dimensions.y / 2.0f;
+		entity.collider->bottomRight.x = entity.position.x + entity.dimensions.x / 2.0f;
+		entity.collider->bottomRight.y = entity.position.y + entity.dimensions.y / 2.0f;
+	}
 }
 
 int main(int argc, char *argv[])
@@ -100,78 +102,83 @@ int main(int argc, char *argv[])
 	// Scaling Type bool
 	bool constantSizeScale = true;
 
+	// Variables to track the previous state of toggle keys to prevent flickering.
+	bool eKeyWasPressedLastFrame = false;
+	bool graveKeyWasPressedLastFrame = false;
+
 	// The main game loop
 	while (running)
 	{
 
-		// Poll for events
 		while (SDL_PollEvent(&event))
 		{
-
-			// If event is Window Resize
-			if (event.type == SDL_EVENT_WINDOW_RESIZED)
-			{
-				// Constant Scaling
-				if (constantSizeScale)
-				{
-					// Resize as if the screen was still the same
-					SDL_SetRenderLogicalPresentation(renderer, 1920, 1080, SDL_LOGICAL_PRESENTATION_STRETCH);
-				}
-				// Proportional Scaling
-				else
-				{
-					// Get Window Size
-					int w, h;
-					SDL_GetWindowSize(window, &w, &h);
-					// Resize as if the screen was still the same
-					SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
-				}
-			}
-
-			// Read input from input manager
-			// If the event is close the window
 			if (event.type == SDL_EVENT_QUIT)
-				running = false;
-
-			// Otherwise look for a key press
-			else if (event.type == SDL_EVENT_KEY_DOWN)
 			{
-				// Testing to allow the keypress of "ESC" to exit the window.
-				if (isKeyPressed(SDL_SCANCODE_ESCAPE))
-				{
-					running = false;
-				}
-				if (isKeyPressed(SDL_SCANCODE_A))
-				{
-					player.velocity = {-1, 0};
-					player.updatePosition();
-				}
-				if (isKeyPressed(SDL_SCANCODE_D))
-				{
-					player.velocity = {1, 0};
-					player.updatePosition();
-				}
-				if (isKeyPressed(SDL_SCANCODE_E))
-				{
-					// Render the player
-					showPlayer = !showPlayer;
-					player.position = {WINDOW_WIDTH / 2.0f, platPos.y - 300.0f};
-					player.velocity = {0, 0};
-
-					// Sync collider to new position
-					SyncColliderToEntity(player);
-				}
-				if (isKeyPressed(SDL_SCANCODE_GRAVE))
-				{
-					constantSizeScale = !constantSizeScale;
-				}
-				if (isKeyPressed(SDL_SCANCODE_SPACE))
-				{
-					player.velocity = {0, -30};
-					player.updatePosition();
-				}
+				running = false;
 			}
 		}
+
+		bool eKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_E);
+		bool graveKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_GRAVE);
+
+		// Toggle player visibility only on the frame the 'E' key is first pressed.
+		if (eKeyIsPressedNow && !eKeyWasPressedLastFrame)
+		{
+			showPlayer = !showPlayer;
+			player.position = {WINDOW_WIDTH / 2.0f, platPos.y - 300.0f};
+			player.velocity = {0, 0};
+			SyncColliderToEntity(player);
+		}
+
+		// Toggle scaling mode only on the frame the '`' key is first pressed.
+		if (graveKeyIsPressedNow && !graveKeyWasPressedLastFrame)
+		{
+			constantSizeScale = !constantSizeScale;
+		}
+
+		// Update the tracking variables for the next frame.
+		eKeyWasPressedLastFrame = eKeyIsPressedNow;
+		graveKeyWasPressedLastFrame = graveKeyIsPressedNow;
+
+		// Constant Scaling
+		if (constantSizeScale)
+		{
+			// Resize as if the screen was still the same
+			SDL_SetRenderLogicalPresentation(renderer, 1920, 1080, SDL_LOGICAL_PRESENTATION_STRETCH);
+		}
+
+		// Proportional Scaling
+		else
+		{
+			// Get Window Size
+			int w, h;
+			SDL_GetWindowSize(window, &w, &h);
+			// Resize as if the screen was still the same
+			SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
+		}
+
+		// Testing to allow the keypress of "ESC" to exit the window.
+		if (isKeyPressed(SDL_SCANCODE_ESCAPE))
+		{
+			running = false;
+		}
+		if (isKeyPressed(SDL_SCANCODE_A))
+		{
+			player.velocity = {-1, 0};
+			player.updatePosition();
+		}
+		if (isKeyPressed(SDL_SCANCODE_D))
+		{
+			player.velocity = {1, 0};
+			player.updatePosition();
+		}
+
+		if (isKeyPressed(SDL_SCANCODE_SPACE))
+		{
+			player.velocity = {0, -30};
+			player.updatePosition();
+		}
+
 		// Rendering
 		setupScreen(renderer);
 
@@ -221,10 +228,8 @@ int main(int argc, char *argv[])
 			player.position.y = playerPos.y;
 		}
 
-		if (showPlayer)
-		{
+		if( showPlayer )
 			renderEntity(renderer, player);
-		}
 
 		refreshScreen(renderer);
 	}
