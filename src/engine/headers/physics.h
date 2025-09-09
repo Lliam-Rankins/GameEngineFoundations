@@ -3,9 +3,8 @@
 */
 #ifndef PHYSICS_H
 #define PHYSICS_H
-#endif
 
-class Physics {
+class WorldPhysics {
     public:
 
     //Use these functions to set and get the gravity variable to apply to entities
@@ -15,3 +14,8 @@ class Physics {
     private:
     static int gravityWeight;
 };
+
+// class PhysicsBody {
+    
+// }
+#endif

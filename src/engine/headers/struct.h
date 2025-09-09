@@ -1,16 +1,19 @@
 #ifndef STRUCT_H
 #define STRUCT_H
 
-//General purpose struct for ordered pairs for readability and simplicity
-struct OrderedPair {
-    float x;
-    float y;
+// Vector struct with x and y values
+struct Vector {
+	float x, y;
+
+	Vector() {
+		x = 0;
+		y = 0;
+	}
+	Vector(float initX, float initY) {
+		x = initX;
+		y = initY;
+	}
 };
 
-//Struct for simplicity
-struct Velocity {
-    OrderedPair direction;
-    float magnitude;
-};
 
 #endif // STRUCT_H

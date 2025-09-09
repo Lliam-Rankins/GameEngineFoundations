@@ -1,6 +1,6 @@
 /*
 	This is a component file that outlines the physics system.
 */
-#include "physics.h"
+#include "../headers/physics.h"
 
-
+int WorldPhysics::gravityWeight = 0;
