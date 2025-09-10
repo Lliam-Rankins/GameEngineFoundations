@@ -1,0 +1,3 @@
+/*
+    This file manages time for the game server and clients.
+*/
