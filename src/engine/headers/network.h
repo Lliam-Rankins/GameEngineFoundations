@@ -2,6 +2,9 @@
  * This header file includes declarations for network management.
  */
 
+#ifndef NETWORK_H
+#define NETWORK_H
+
 #pragma once
 #include <string>
 #include <memory>
@@ -54,3 +57,7 @@ class NetworkManager {
         // Boolean value to ensure that whatever needed to happen goes well before proceeding (starting server, etc)
         bool m_isInitialized;
     };
+
+
+
+#endif // NETWORK_H
