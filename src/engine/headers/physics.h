@@ -15,7 +15,4 @@ class WorldPhysics {
     static int gravityWeight;
 };
 
-// class PhysicsBody {
-    
-// }
 #endif
