@@ -22,16 +22,18 @@ class NetworkManager {
 
         /**
          * Starts the server at the listed port.
-         * @param port the port number
+         * @param replyPort the port for replying
+         * @param publishPort the port for publishing
          */
-        bool startServer(int port);
+        bool startServer(int replyPort, int publishPort);
 
         /**
          * Starts the client and connects to the server address at the port given.
          * @param serverAddress the address of the server
-         * @param port the port number
+         * @param requestPort the port for requests
+         * @param subscribePort the port for subscribes
          */
-        bool startClient(const std::string& serverAddress, int port);
+        bool startClient(const std::string& serverAddress, int requestPort, int subscribePort);
 
         /**
          * Closes connections and contexts.
@@ -51,8 +53,13 @@ class NetworkManager {
         // A pointer to the current context
         std::unique_ptr<zmq::context_t> m_context;
 
-        // A pointer to the current socket
-        std::unique_ptr<zmq::socket_t> m_socket;
+        // The server's sockets
+        std::unique_ptr<zmq::socket_t> replySocket;
+        std::unique_ptr<zmq::socket_t> publishSocket;
+
+        // The client's sockets
+        std::unique_ptr<zmq::socket_t> requestSocket;
+        std::unique_ptr<zmq::socket_t> subscribeSocket;
 
         // Boolean value to ensure that whatever needed to happen goes well before proceeding (starting server, etc)
         bool m_isInitialized;
