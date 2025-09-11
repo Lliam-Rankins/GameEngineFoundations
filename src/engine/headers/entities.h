@@ -14,6 +14,15 @@ public:
 	//Constructor (you may want a constructor which includes some arguments, like x,y position, texture file, etc.
 	Entity();
 
+	// Constructor with default velocity of (0,0)
+	Entity(const Vector position, const Vector dimension, SDL_Texture* texture, bool physics);
+
+	// Constructor with default velocity of (0,0) and auto-calculates dimensions
+	Entity(const Vector position, SDL_Texture* texture, bool physics);
+
+	// Constructor that auto-calculates dimensions
+	Entity(const Vector position, SDL_Texture* texture, Vector velocity, bool physics);
+
 	//Constructor (you may want a constructor which includes some arguments, like x,y position, texture file, etc.
 	// Position, Dimensions, Texture, Physics?, Velocity
 	Entity(const Vector position, const Vector dimension, SDL_Texture* texture, bool physics, const Vector vel);
@@ -23,6 +32,12 @@ public:
 
 	// Sets the collider for this entity, optional
 	void setCollider(Collider *newCollider);
+
+	// Makes the collider for this entity based on dimensions
+	void makeCollider();
+
+	// Updates collider's position if needed
+	void updateCollider();
 
 	/*
 	 * --------------------AI USE CITATION---------------------
@@ -36,7 +51,7 @@ public:
 	Entity(Entity&&) noexcept = default;
 	Entity& operator=(Entity&&) noexcept = default;
 
-	// Entity's bottom right point
+	// Entity's top left point
 	Vector position;
 
 	// Distance up and left to top left point
