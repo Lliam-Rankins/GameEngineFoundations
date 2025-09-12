@@ -9,6 +9,7 @@
 #include <string>
 #include <memory>
 #include <optional>
+#include "protocol.h"
 
 namespace zmq {
     class context_t;

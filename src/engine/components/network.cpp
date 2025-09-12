@@ -5,6 +5,11 @@
 #include "../headers/network.h"
 #include <zmq.hpp>
 
+// Storage
+GameState gameState[MAX_PLAYERS];
+PlayerState playerState;
+
+
 /**
  * Default constructor.
  */
@@ -81,10 +86,55 @@ bool NetworkManager::startClient(const std::string &serverAddress, int requestPo
 }
 
 /**
- * Updates client or server state
+ * Updates client and server state
  */
-void update()
+void NetworkManager::update()
 {
+    // Server
+    if (m_role == Role::SERVER) {
+        // Wait for request
+        zmq::message_t request;
+        replySocket.get()->recv(request);
+
+        // Confirm Recive with empty msg
+        zmq::message_t reply;
+        replySocket.get()->send(reply);
+
+
+        // Code to decompile Player State
+        PlayerState* playerState = reinterpret_cast<PlayerState*>(request.data());
+
+
+        // Update Game State
+        gameState->players[playerState->clientId] = *playerState;
+
+        // Publish the updated playerState State
+        zmq::message_t publish(&playerState, sizeof(GameState));
+        publishSocket.get()->send(publish);
+    }
+
+
+
+    // Client
+    if (m_role == Role::CLIENT) {
+        // Create and Send Player State
+        zmq::message_t request(&playerState, sizeof(PlayerState));
+        requestSocket.get()->send(request);
+
+        // Receive Confirmation from Server
+        zmq::message_t reply;
+        requestSocket.get()->recv(reply);
+
+
+
+        // Receive Subcribe
+        zmq::message_t subscribe;
+        subscribeSocket.get()->recv(subscribe);
+
+        // Parse Subscribe, update client gamestate?
+        PlayerState* sentPlayerState = reinterpret_cast<PlayerState*>(subscribe.data());
+        gameState->players[sentPlayerState->clientId] = *sentPlayerState;
+    }
 }
 
 /**
