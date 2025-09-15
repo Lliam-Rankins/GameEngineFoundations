@@ -3,12 +3,8 @@
  */
 
 #include "../headers/network.h"
+#include "../headers/protocol.h"
 #include <zmq.hpp>
-
-// Storage
-GameState gameState[MAX_PLAYERS];
-PlayerState playerState;
-
 
 /**
  * Default constructor.
@@ -34,15 +30,15 @@ bool NetworkManager::startServer(int replyPort, int publishPort)
     m_context = std::make_unique<zmq::context_t>(1);
 
     // Create the sockets and store them in the member variables
-    replySocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::rep);
-    publishSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::pub);
+    m_replySocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::rep);
+    m_publishSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::pub);
 
     std::string replyAddress = "tcp://*:" + std::to_string(replyPort);
     std::string publishAddress = "tcp://*:" + std::to_string(publishPort);
 
     // Bind em
-    replySocket->bind(replyAddress);
-    publishSocket->bind(publishAddress);
+    m_replySocket->bind(replyAddress);
+    m_publishSocket->bind(publishAddress);
 
     m_role = Role::SERVER;
 
@@ -63,26 +59,35 @@ bool NetworkManager::startClient(const std::string &serverAddress, int requestPo
     m_context = std::make_unique<zmq::context_t>(1);
 
     // Create the subscribe socket
-    subscribeSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::sub);
+    m_subscribeSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::sub);
 
     // Create the request socket
-    requestSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::req);
+    m_requestSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::req);
 
     // The request address string
     std::string requestAddress = serverAddress + ":" + std::to_string(requestPort);
     std::string subscribeAddress = serverAddress + ":" + std::to_string(subscribePort);
 
     // Connect
-    subscribeSocket->connect(subscribeAddress);
-    requestSocket->connect(requestAddress);
+    m_subscribeSocket->connect(subscribeAddress);
+    m_requestSocket->connect(requestAddress);
 
     // Set the subscribe pattern to listen for any subscription updates
-    subscribeSocket->set(zmq::sockopt::subscribe, "");
+    m_subscribeSocket->set(zmq::sockopt::subscribe, "");
 
     m_role = Role::CLIENT;
     m_isInitialized = true;
 
     return true;
+}
+
+void NetworkManager::sendPlayerState(const PlayerState &state)
+{
+    if (m_role == Role::CLIENT && m_isInitialized)
+    {
+        // Send the player's current state to the server.
+        m_requestSocket->send(zmq::buffer(&state, sizeof(PlayerState)));
+    }
 }
 
 /**
@@ -91,49 +96,60 @@ bool NetworkManager::startClient(const std::string &serverAddress, int requestPo
 void NetworkManager::update()
 {
     // Server
-    if (m_role == Role::SERVER) {
+    if (m_role == Role::SERVER)
+    {
         // Wait for request
         zmq::message_t request;
-        replySocket.get()->recv(request);
+        auto result = m_replySocket->recv(request, zmq::recv_flags::dontwait);
 
-        // Confirm Recive with empty msg
-        zmq::message_t reply;
-        replySocket.get()->send(reply);
+        if (result.has_value() && result.value() > 0)
+        {
+            PlayerState receivedState = *request.data<PlayerState>();
 
+            // Confirm Recive with empty msg
+            zmq::message_t reply;
+            m_replySocket->send(zmq::buffer("OK", 2));
 
-        // Code to decompile Player State
-        PlayerState* playerState = reinterpret_cast<PlayerState*>(request.data());
+            bool foundPlayer = false;
+            for (int i = 0; i < m_gameState.num_clients; i++)
+            {
+                if (m_gameState.players[i].clientId == receivedState.clientId)
+                {
+                    m_gameState.players[i] = receivedState;
+                    foundPlayer = true;
+                    break;
+                }
+            }
 
+            if (!foundPlayer && m_gameState.num_clients < MAX_PLAYERS)
+            {
+                // Assign the new client an ID. For now, we'll trust the one they sent,
+                // but in the future the server should assign this.
+                m_gameState.players[m_gameState.num_clients] = receivedState;
+                m_gameState.num_clients++;
+            }
+        }
 
-        // Update Game State
-        gameState->players[playerState->clientId] = *playerState;
-
-        // Publish the updated playerState State
-        zmq::message_t publish(&playerState, sizeof(GameState));
-        publishSocket.get()->send(publish);
+        m_publishSocket->send(zmq::buffer(&m_gameState, sizeof(GameState)));
     }
 
-
-
     // Client
-    if (m_role == Role::CLIENT) {
+    if (m_role == Role::CLIENT)
+    {
         // Create and Send Player State
-        zmq::message_t request(&playerState, sizeof(PlayerState));
-        requestSocket.get()->send(request);
-
-        // Receive Confirmation from Server
         zmq::message_t reply;
-        requestSocket.get()->recv(reply);
+        m_requestSocket->recv(reply, zmq::recv_flags::dontwait);
 
+        // --- 2. Listen for the GameState broadcast ---
+        zmq::message_t gameStateMsg;
+        auto result = m_subscribeSocket->recv(gameStateMsg, zmq::recv_flags::dontwait);
 
-
-        // Receive Subcribe
-        zmq::message_t subscribe;
-        subscribeSocket.get()->recv(subscribe);
-
-        // Parse Subscribe, update client gamestate?
-        PlayerState* sentPlayerState = reinterpret_cast<PlayerState*>(subscribe.data());
-        gameState->players[sentPlayerState->clientId] = *sentPlayerState;
+        if (result.has_value() && result.value() > 0)
+        {
+            // We received a world update!
+            // Update our local copy of the GameState.
+            m_gameState = *gameStateMsg.data<GameState>();
+        }
     }
 }
 
@@ -145,23 +161,22 @@ void NetworkManager::cleanUp()
     if (m_isInitialized)
     {
         // Now we can close the member sockets because they exist
-        if (requestSocket)
-            requestSocket->close();
-        if (subscribeSocket)
-            subscribeSocket->close();
-        if (replySocket)
-            replySocket->close();
-        if (publishSocket)
-            publishSocket->close();
-
+        if (m_requestSocket)
+            m_requestSocket->close();
+        if (m_subscribeSocket)
+            m_subscribeSocket->close();
+        if (m_replySocket)
+            m_replySocket->close();
+        if (m_publishSocket)
+            m_publishSocket->close();
         if (m_context)
             m_context->close();
 
         // unique_ptr will handle deletion, but resetting them is good practice
-        requestSocket.reset();
-        subscribeSocket.reset();
-        replySocket.reset();
-        publishSocket.reset();
+        m_requestSocket.reset();
+        m_subscribeSocket.reset();
+        m_replySocket.reset();
+        m_publishSocket.reset();
         m_context.reset();
 
         m_isInitialized = false;
