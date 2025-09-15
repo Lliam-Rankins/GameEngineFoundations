@@ -64,12 +64,12 @@ private:
     std::unique_ptr<zmq::context_t> m_context;
 
     // The server's sockets
-    std::unique_ptr<zmq::socket_t> replySocket;
-    std::unique_ptr<zmq::socket_t> publishSocket;
+    std::unique_ptr<zmq::socket_t> m_replySocket;
+    std::unique_ptr<zmq::socket_t> m_publishSocket;
 
     // The client's sockets
-    std::unique_ptr<zmq::socket_t> requestSocket;
-    std::unique_ptr<zmq::socket_t> subscribeSocket;
+    std::unique_ptr<zmq::socket_t> m_requestSocket;
+    std::unique_ptr<zmq::socket_t> m_subscribeSocket;
 
     // Boolean value to ensure that whatever needed to happen goes well before proceeding (starting server, etc)
     bool m_isInitialized;

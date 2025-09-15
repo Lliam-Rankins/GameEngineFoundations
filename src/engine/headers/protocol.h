@@ -1,7 +1,5 @@
 // protocol.h
 #pragma once
-#ifndef PROTOCOL_H
-#define PROTOCOL_H
 
 const int MAX_PLAYERS = 4; // The max number of players your server can handle.
 
@@ -17,6 +15,3 @@ struct GameState {
     int num_clients = 0; // How many players are currently connected.
     PlayerState players[MAX_PLAYERS]; // An array holding the state of every player.
 };
-
-
-#endif // PROTOCOL_H
