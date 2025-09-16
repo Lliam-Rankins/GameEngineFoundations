@@ -35,7 +35,7 @@ void renderEntity(SDL_Renderer* renderer, const Entity& e) {
     SDL_RenderTexture(renderer, e.texture, NULL, &rect);
 }
 
-int textureError(){
+int textureError(SDL_Renderer *renderer, SDL_Window *window){
 	SDL_Log("Could not load image: %s", SDL_GetError());
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
