@@ -30,4 +30,4 @@ struct Collider {
 // This function returns true if two colliders are overlapping, false otherwise
 bool overlappingColliders(Collider a, Collider b);
 
-#endif
+#endif // COLLISIONS_H
