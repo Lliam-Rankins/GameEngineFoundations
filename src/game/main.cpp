@@ -1,12 +1,16 @@
 /*
-	This is a component file that outlines and implements rendering.
+	This is a file that runs the main loop.
 */
 #include "../engine/headers/render.h"
 #include "../engine/headers/physics.h"
 #include "../engine/headers/collisions.h"
 #include "../engine/headers/network.h"
 #include "../engine/headers/protocol.h"
+#include "../engine/headers/entities.h"
+#include "../engine/headers/input.h"
 #include <map>
+#include <SDL3_image/SDL_image.h>
+#include <iostream>
 
 SDL_Renderer *renderer = nullptr;
 SDL_Window *window = nullptr;
@@ -76,7 +80,7 @@ int main(int argc, char *argv[])
 	Vector platDim = {62, 30};
 	Vector vel = {0, 0};
 
-	Entity platform(platPos, platDim, platformTexture, false, vel);
+	Entity platform(platPos, platDim, vel, false);
 
 	// Create a collider for the platform
 	Collider platformCollider(
@@ -89,7 +93,7 @@ int main(int argc, char *argv[])
 	// NETWORKING: Create ONE entity for the player this client controls.
 	Vector playerPos = {WINDOW_WIDTH / 2, platPos.y - 100};
 	Vector playerDim = {71, 67};
-	Entity localPlayer(playerPos, playerDim, playerTexture, true, {0, 0});
+	Entity localPlayer(playerPos, playerDim, {0, 0}, true);
 
 	Collider playerCollider(
 		playerPos.x - playerDim.x / 2.0f,
@@ -102,11 +106,20 @@ int main(int argc, char *argv[])
 	// The key is their unique client ID, and the value is their Entity object.
 	std::map<int, Entity> remotePlayers;
 
+	std::map<int, RenderComponent> playerRenderers;
+
+	// Create the RenderComponent for our local player
+	playerRenderers.emplace(myClientId, RenderComponent(playerTexture));
+
+	// You would also create RenderComponents for the platform, police car, etc.
+	RenderComponent platformRenderer(platformTexture);
+	RenderComponent policeRenderer(policeTexture);
+
 	Vector policePos = {platPos.x - 100, platPos.y + 50};
 	Vector policeDim = {163, 60};
 	vel = {1, 0};
 
-	Entity police(policePos, policeDim, policeTexture, false, vel);
+	Entity police(policePos, policeDim, vel, false);
 
 	Collider policeCollider(
 		policePos.x - policeDim.x / 2.0f,
@@ -237,14 +250,23 @@ int main(int argc, char *argv[])
 				{
 					if (remotePlayers.find(serverPlayer.clientId) == remotePlayers.end())
 					{
-						// If not, construct a new Entity for them directly inside the map.
-						// The arguments inside emplace are passed directly to the Entity's constructor.
-						remotePlayers.emplace(serverPlayer.clientId, Entity({serverPlayer.x, serverPlayer.y}, {71, 67}, playerTexture, false, {0, 0}));
+						// If not, create a new data-only Entity for them.
+						remotePlayers.emplace(serverPlayer.clientId, Entity({serverPlayer.x, serverPlayer.y}, {71, 67}));
+						std::cout << "New player joined with ID: " << serverPlayer.clientId << std::endl;
 					}
 					else
 					{
-						// If we have seen them, just update their position.
+						// If they already exist, just update their position data.
 						remotePlayers.at(serverPlayer.clientId).position = {serverPlayer.x, serverPlayer.y};
+					}
+
+					// --- VISUAL COMPONENT CREATION ---
+					// Check if we have a visual RenderComponent for this remote player yet.
+					if (playerRenderers.find(serverPlayer.clientId) == playerRenderers.end())
+					{
+						// If not, create a new RenderComponent for them using the shared player texture.
+						// Note: This passes the texture pointer but doesn't create a new texture from disk, which is efficient.
+						playerRenderers.emplace(serverPlayer.clientId, RenderComponent(playerTexture));
 					}
 				}
 			}
@@ -252,9 +274,6 @@ int main(int argc, char *argv[])
 
 		// Rendering
 		setupScreen(renderer);
-
-		// Render the platform
-		renderEntity(renderer, platform);
 
 		// Create a leftmost bound for police car position
 		int leftBound = policePos.x - 100;
@@ -266,9 +285,6 @@ int main(int argc, char *argv[])
 			police.velocity = {1, 0};
 
 		police.updatePosition();
-
-		// Render the police car
-		renderEntity(renderer, police);
 
 		if (localPlayer.physicsApplied)
 		{
@@ -297,18 +313,33 @@ int main(int argc, char *argv[])
 			localPlayer.position.y = playerPos.y;
 		}
 
-        // Render the local player if toggled on
-        if (showPlayer) {
-            renderEntity(renderer, localPlayer);
-        }
+		platformRenderer.render(renderer, platform.position, platform.dimensions);
+		policeRenderer.render(renderer, police.position, police.dimensions);
 
-        // Render all the remote players
-        for (auto const& [id, remote_player] : remotePlayers) {
-            renderEntity(renderer, remote_player);
-        }
+		// Render the local player (only when showPlayer is true)
+		if (showPlayer && playerRenderers.count(myClientId))
+		{
+			playerRenderers.at(myClientId).render(renderer, localPlayer.position, localPlayer.dimensions);
+		}
+
+		// Render remote players
+		for (auto const &[id, remote_player] : remotePlayers)
+		{
+			// Check if we have a renderer for this remote player yet
+			if (playerRenderers.find(id) == playerRenderers.end())
+			{
+				// If not, create one!
+				playerRenderers.emplace(id, RenderComponent(playerTexture));
+			}
+			playerRenderers.at(id).render(renderer, remote_player.position, remote_player.dimensions);
+		}
 
 		refreshScreen(renderer);
 	}
+
+	// SDL_DestroyTexture(playerTexture);
+	// SDL_DestroyTexture(platformTexture);
+	// SDL_DestroyTexture(policeTexture);
 
 	networkManager.cleanUp();
 	SDL_DestroyRenderer(renderer);
