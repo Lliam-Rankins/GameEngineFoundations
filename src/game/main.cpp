@@ -4,6 +4,9 @@
 #include "../engine/headers/render.h"
 #include "../engine/headers/physics.h"
 #include "../engine/headers/collisions.h"
+#include "../engine/headers/network.h"
+#include "../engine/headers/protocol.h"
+#include <map>
 
 SDL_Renderer *renderer = nullptr;
 SDL_Window *window = nullptr;
@@ -51,6 +54,24 @@ int main(int argc, char *argv[])
 	if (!policeTexture)
 		textureError();
 
+	NetworkManager networkManager;
+
+	// Request port 5555 and subscribe port 5556
+	const int REQUEST_PORT = 5555;
+	const int SUBSCRIBE_PORT = 5556;
+	networkManager.startClient("localhost", REQUEST_PORT, SUBSCRIBE_PORT);
+
+	int myClientId = networkManager.connectAndHandshake();
+
+	if (myClientId == -1)
+	{
+		// Handle error: couldn't connect to server
+		std::cerr << "Failed to connect and get a client ID from the server." << std::endl;
+		return 1;
+	}
+
+	std::cout << "Successfully connected to server. My client ID is: " << myClientId << std::endl;
+
 	Vector platPos = {WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2};
 	Vector platDim = {62, 30};
 	Vector vel = {0, 0};
@@ -65,19 +86,21 @@ int main(int argc, char *argv[])
 		platPos.y + platDim.y / 2.0f);
 	platform.setCollider(&platformCollider);
 
+	// NETWORKING: Create ONE entity for the player this client controls.
 	Vector playerPos = {WINDOW_WIDTH / 2, platPos.y - 100};
 	Vector playerDim = {71, 67};
-	vel = {0, 0};
-
-	Entity player(playerPos, playerDim, playerTexture, true, vel);
+	Entity localPlayer(playerPos, playerDim, playerTexture, true, {0, 0});
 
 	Collider playerCollider(
 		playerPos.x - playerDim.x / 2.0f,
 		playerPos.y - playerDim.y / 2.0f,
 		playerPos.x + playerDim.x / 2.0f,
 		playerPos.y + playerDim.y / 2.0f);
+	localPlayer.setCollider(&playerCollider);
 
-	player.setCollider(&playerCollider);
+	// NETWORKING: Create a map to hold all the OTHER players.
+	// The key is their unique client ID, and the value is their Entity object.
+	std::map<int, Entity> remotePlayers;
 
 	Vector policePos = {platPos.x - 100, platPos.y + 50};
 	Vector policeDim = {163, 60};
@@ -125,9 +148,9 @@ int main(int argc, char *argv[])
 		if (eKeyIsPressedNow && !eKeyWasPressedLastFrame)
 		{
 			showPlayer = !showPlayer;
-			player.position = {WINDOW_WIDTH / 2.0f, platPos.y - 300.0f};
-			player.velocity = {0, 0};
-			SyncColliderToEntity(player);
+			localPlayer.position = {WINDOW_WIDTH / 2.0f, platPos.y - 300.0f};
+			localPlayer.velocity = {0, 0};
+			SyncColliderToEntity(localPlayer);
 		}
 
 		// Toggle scaling mode only on the frame the '`' key is first pressed.
@@ -164,19 +187,67 @@ int main(int argc, char *argv[])
 		}
 		if (isKeyPressed(SDL_SCANCODE_A))
 		{
-			player.velocity = {-1, 0};
-			player.updatePosition();
+			localPlayer.velocity.x = -5.0f;
 		}
 		if (isKeyPressed(SDL_SCANCODE_D))
 		{
-			player.velocity = {1, 0};
-			player.updatePosition();
+			localPlayer.velocity.x = 5.0f;
 		}
 
 		if (isKeyPressed(SDL_SCANCODE_SPACE))
 		{
-			player.velocity = {0, -30};
-			player.updatePosition();
+			localPlayer.velocity.y = -30;
+		}
+
+		localPlayer.updatePosition();
+
+		// --- 2. NETWORKING: SEND STATE ---
+		// Package the localPlayer's current state into a PlayerState struct.
+		PlayerState myState;
+		myState.clientId = myClientId;
+		myState.x = localPlayer.position.x;
+		myState.y = localPlayer.position.y;
+		networkManager.sendPlayerState(myState);
+
+		// --- 3. NETWORKING: RECEIVE & UPDATE ---
+		networkManager.update(); // This receives the latest broadcast from the server.
+		auto latestGameState = networkManager.getLatestGameState();
+
+		if (latestGameState.has_value())
+		{
+			GameState &gs = latestGameState.value();
+
+			// This is the REPLICATION step.
+			// We loop through the players in the GameState from the server.
+			for (int i = 0; i < gs.num_clients; ++i)
+			{
+				PlayerState &serverPlayer = gs.players[i];
+
+				// NETWORKING: First-time connection logic to find out our ID
+				if (myClientId == -1)
+				{
+					// Let's assume the server adds players in order and the last
+					// one in the list is the one we just requested. This is a
+					// simple but brittle way to do it. A real handshake is better.
+					myClientId = serverPlayer.clientId;
+				}
+
+				// If the player from the server is NOT us, update them.
+				if (serverPlayer.clientId != myClientId)
+				{
+					if (remotePlayers.find(serverPlayer.clientId) == remotePlayers.end())
+					{
+						// If not, construct a new Entity for them directly inside the map.
+						// The arguments inside emplace are passed directly to the Entity's constructor.
+						remotePlayers.emplace(serverPlayer.clientId, Entity({serverPlayer.x, serverPlayer.y}, {71, 67}, playerTexture, false, {0, 0}));
+					}
+					else
+					{
+						// If we have seen them, just update their position.
+						remotePlayers.at(serverPlayer.clientId).position = {serverPlayer.x, serverPlayer.y};
+					}
+				}
+			}
 		}
 
 		// Rendering
@@ -199,41 +270,47 @@ int main(int argc, char *argv[])
 		// Render the police car
 		renderEntity(renderer, police);
 
-		if (player.physicsApplied)
+		if (localPlayer.physicsApplied)
 		{
-			player.velocity.y += WorldPhysics::getGravity();
+			localPlayer.velocity.y += WorldPhysics::getGravity();
 		}
 
-		player.position.y += player.velocity.y;
-
-		// Update collider to match new position
-		player.collider->topLeft.y = player.position.y - player.dimensions.y / 2.0f;
-		player.collider->bottomRight.y = player.position.y + player.dimensions.y / 2.0f;
+		localPlayer.position.x += localPlayer.velocity.x;
+		localPlayer.position.y += localPlayer.velocity.y;
+		SyncColliderToEntity(localPlayer);
 
 		// Collision check
-		if (overlappingColliders(*player.collider, *platform.collider))
+		if (overlappingColliders(*localPlayer.collider, *platform.collider))
 		{
-			if (player.velocity.y > 0)
+			if (localPlayer.velocity.y > 0)
 			{
-				player.position.y = platform.position.y - platform.dimensions.y / 2.0f - player.dimensions.y / 2.0f;
-				player.collider->topLeft.y = player.position.y - player.dimensions.y / 2.0f;
-				player.collider->bottomRight.y = player.position.y + player.dimensions.y / 2.0f;
-				player.velocity.y = 0;
+				localPlayer.position.y = platform.position.y - platform.dimensions.y / 2.0f - localPlayer.dimensions.y / 2.0f;
+				localPlayer.collider->topLeft.y = localPlayer.position.y - localPlayer.dimensions.y / 2.0f;
+				localPlayer.collider->bottomRight.y = localPlayer.position.y + localPlayer.dimensions.y / 2.0f;
+				localPlayer.velocity.y = 0;
 			}
 		}
 
-		if (overlappingColliders(*player.collider, *police.collider))
+		if (overlappingColliders(*localPlayer.collider, *police.collider))
 		{
-			player.position.x = playerPos.x;
-			player.position.y = playerPos.y;
+			localPlayer.position.x = playerPos.x;
+			localPlayer.position.y = playerPos.y;
 		}
 
-		if( showPlayer )
-			renderEntity(renderer, player);
+        // Render the local player if toggled on
+        if (showPlayer) {
+            renderEntity(renderer, localPlayer);
+        }
+
+        // Render all the remote players
+        for (auto const& [id, remote_player] : remotePlayers) {
+            renderEntity(renderer, remote_player);
+        }
 
 		refreshScreen(renderer);
 	}
 
+	networkManager.cleanUp();
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();

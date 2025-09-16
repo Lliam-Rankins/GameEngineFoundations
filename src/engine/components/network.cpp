@@ -5,11 +5,12 @@
 #include "../headers/network.h"
 #include "../headers/protocol.h"
 #include <zmq.hpp>
+#include <iostream>
 
 /**
  * Default constructor.
  */
-NetworkManager::NetworkManager() : m_role(Role::NONE), m_isInitialized(false) {}
+NetworkManager::NetworkManager() : m_role(Role::NONE), m_isInitialized(false), m_hasReceivedFirstState(false) {}
 
 /**
  * Destructor
@@ -65,8 +66,8 @@ bool NetworkManager::startClient(const std::string &serverAddress, int requestPo
     m_requestSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::req);
 
     // The request address string
-    std::string requestAddress = serverAddress + ":" + std::to_string(requestPort);
-    std::string subscribeAddress = serverAddress + ":" + std::to_string(subscribePort);
+    std::string requestAddress = "tcp://" + serverAddress + ":" + std::to_string(requestPort);
+    std::string subscribeAddress = "tcp://" + serverAddress + ":" + std::to_string(subscribePort);
 
     // Connect
     m_subscribeSocket->connect(subscribeAddress);
@@ -91,45 +92,88 @@ void NetworkManager::sendPlayerState(const PlayerState &state)
 }
 
 /**
+ * Connects the client and the server together.
+ * @return the integer value representing the client ID.
+ */
+int NetworkManager::connectAndHandshake() {
+    if (m_role != Role::CLIENT || !m_isInitialized) {
+        return -1; // Can't handshake if not a connected client
+    }
+
+    // 1. Send the initial connection request
+    PlayerState connectRequest;
+    connectRequest.clientId = -1; // -1 signifies a new connection
+    m_requestSocket->send(zmq::buffer(&connectRequest, sizeof(PlayerState)));
+
+    // 2. Wait for the server's reply.
+    zmq::message_t reply;
+    auto result = m_requestSocket->recv(reply, zmq::recv_flags::none);
+
+    if (!result.has_value() || result.value() == 0) {
+        return -1; // Failed to get a reply from the server
+    }
+
+    // The server should reply with a PlayerState object containing our new ID.
+    PlayerState assignedState = *reply.data<PlayerState>();
+    return assignedState.clientId;
+}
+
+/**
  * Updates client and server state
  */
 void NetworkManager::update()
 {
-    // Server
+
     if (m_role == Role::SERVER)
     {
-        // Wait for request
         zmq::message_t request;
         auto result = m_replySocket->recv(request, zmq::recv_flags::dontwait);
 
+        // Check if we actually received a message from any client
         if (result.has_value() && result.value() > 0)
         {
             PlayerState receivedState = *request.data<PlayerState>();
 
-            // Confirm Recive with empty msg
-            zmq::message_t reply;
-            m_replySocket->send(zmq::buffer("OK", 2));
+            // If the ID is -1
+            if (receivedState.clientId == -1) {
+                // This is a new client connecting
+                if (m_gameState.num_clients < MAX_PLAYERS) {
+                    // 1. Assign a new, unique ID
+                    int newId = m_gameState.num_clients;
+                    receivedState.clientId = newId;
 
-            bool foundPlayer = false;
-            for (int i = 0; i < m_gameState.num_clients; i++)
-            {
-                if (m_gameState.players[i].clientId == receivedState.clientId)
-                {
-                    m_gameState.players[i] = receivedState;
-                    foundPlayer = true;
-                    break;
+                    // 2. Add them to our game state.
+                    m_gameState.players[newId] = receivedState;
+                    m_gameState.num_clients++;
+                    
+                    std::cout << "New player connected. Assigned ID: " << newId << std::endl;
+
+                    // 3. Send their state back with the update ID.
+                    // This completes the handshake.
+                    m_replySocket->send(zmq::buffer(&receivedState, sizeof(PlayerState)));
+                } else {
+                    // Server is full, send a "full" message or an error state.
+                    // For now, we'll just send an empty reply.
+                    m_replySocket->send(zmq::buffer("FULL", 4));
                 }
             }
-
-            if (!foundPlayer && m_gameState.num_clients < MAX_PLAYERS)
-            {
-                // Assign the new client an ID. For now, we'll trust the one they sent,
-                // but in the future the server should assign this.
-                m_gameState.players[m_gameState.num_clients] = receivedState;
-                m_gameState.num_clients++;
+            // Otherwise it's a normal client request
+            else {
+                // This is an existing client sending a regular update.
+                // Find and update the player in our master game state.
+                for (int i = 0; i < m_gameState.num_clients; ++i) {
+                    if (m_gameState.players[i].clientId == receivedState.clientId) {
+                        m_gameState.players[i] = receivedState;
+                        break;
+                    }
+                }
+                
+                // Send a simple "OK" reply to complete the request reply cycle
+                m_replySocket->send(zmq::buffer("OK", 2));
             }
         }
 
+        // After handling any incoming requests publish the latest world state
         m_publishSocket->send(zmq::buffer(&m_gameState, sizeof(GameState)));
     }
 
@@ -138,7 +182,7 @@ void NetworkManager::update()
     {
         // Create and Send Player State
         zmq::message_t reply;
-        m_requestSocket->recv(reply, zmq::recv_flags::dontwait);
+        auto recvResult = m_requestSocket->recv(reply);
 
         // --- 2. Listen for the GameState broadcast ---
         zmq::message_t gameStateMsg;
@@ -151,6 +195,25 @@ void NetworkManager::update()
             m_gameState = *gameStateMsg.data<GameState>();
         }
     }
+}
+
+/*
+ * This allows the game logic to get the most recent snapshot of the world
+ * as dictated by the server.
+ *
+ * @return An std::optional containing the GameState if one has been received,
+ * or std::nullopt if the client is still waiting for the first update.
+ */
+std::optional<GameState> NetworkManager::getLatestGameState()
+{
+    // If we haven't received the first broadcast from the server yet,
+    // return an empty optional to signify "no data available."
+    if (!m_hasReceivedFirstState) {
+        return std::nullopt;
+    }
+
+    // Otherwise, return the latest GameState we have stored.
+    return m_gameState;
 }
 
 /**
@@ -182,4 +245,5 @@ void NetworkManager::cleanUp()
         m_isInitialized = false;
         m_role = Role::NONE;
     }
+
 }
