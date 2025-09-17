@@ -2,38 +2,39 @@
     This header file provides declarations of functions and structures used in timeline.cpp
 */
 
-#ifndef TIMELINE_H
-#define TIMELINE_H
+#pragma once
 
 #include <chrono>
 // Timeline class to maintain a time-state for the game
-class Timeline {
+class Timeline
+{
 public:
-    Timeline();
-    // Real-world time
-    long long realTime;
-    // Real-world start time for the game, may not be useful but there in case
-    long long realStartTime;
-    // Starts at 0, grows from there, scales with timeScale
-    long long gameTime;
-    // Change in time between updateTime()s, scales with timeScale
-    long long deltaTime;
-    // 0.5-2.0, 1.0 is default, affects how time in game is measured so that we can change speeds as necessary
-    float timeScale;
-    // Is the timeline state paused?
-    bool paused;
+    // Default constructor for timeline with tickSizeMs as 16.
+    Timeline(long long tickSizeMs = 16);
 
-    // Calculate time updates
-    void updateTime();
-    // Pause time
+    void update();
+
+    long long getElapsedTicks() const;
+    float getDeltaTime() const;
+
     void pauseTime();
-    // Unpause time
     void unpauseTime();
-    // Change the scale of time for the timeline
-    void setTimeScale(float scale);
-    // Get the deltaTime var
-    long long getDT();
+    bool isPaused() const;
+
+private:
+    // Use the high_resolution_clock's native time_point for maximum precision
+    std::chrono::high_resolution_clock::time_point m_startTime;
+    std::chrono::high_resolution_clock::time_point m_lastUpdateTime;
+
+    // Store durations in nanoseconds using int64_t (long long)
+    long long m_tickSizeNs; // The duration of a single "tick" in nanoseconds
+    long long m_totalElapsedNs;
+    long long m_deltaTimeNs;
+
+    // Variables for pausing
+    std::chrono::high_resolution_clock::time_point m_pauseStartTime;
+    long long m_totalPausedNs;
+
+    double m_timeScale;
+    bool m_isPaused;
 };
-
-
-#endif

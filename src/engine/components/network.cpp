@@ -167,8 +167,7 @@ void NetworkManager::update()
 
                     std::cout << "New player connected. Assigned ID: " << newId << std::endl;
 
-                    // 3. Send their state back with the update ID.
-                    // This completes the handshake.
+                    // Send their state back with the update ID.
                     m_replySocket->send(zmq::buffer(&receivedState, sizeof(PlayerState)));
                 }
                 else
@@ -211,7 +210,7 @@ void NetworkManager::update()
         {
             m_gameState = *gameStateMsg.data<GameState>();
 
-            // FIX #3: Set the flag to true once you get the first message.
+            // Set the flag to true once you get the first message.
             m_hasReceivedFirstState = true;
         }
     }

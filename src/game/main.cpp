@@ -193,7 +193,6 @@ int main(int argc, char *argv[])
 			SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
 		}
 
-		// Testing to allow the keypress of "ESC" to exit the window.
 		if (isKeyPressed(SDL_SCANCODE_ESCAPE))
 		{
 			running = false;
@@ -214,34 +213,30 @@ int main(int argc, char *argv[])
 
 		localPlayer.updatePosition();
 
-		// --- 2. NETWORKING: SEND STATE ---
-		// Package the localPlayer's current state into a PlayerState struct.
+		// Package the localPlayer's current state into a PlayerState struct and send it
 		PlayerState myState;
 		myState.clientId = myClientId;
 		myState.x = localPlayer.position.x;
 		myState.y = localPlayer.position.y;
 		networkManager.sendPlayerState(myState);
 
-		// --- 3. NETWORKING: RECEIVE & UPDATE ---
-		networkManager.update(); // This receives the latest broadcast from the server.
+		// Update the network manager to get the latest gamestate/broadcast
+		networkManager.update();
 		auto latestGameState = networkManager.getLatestGameState();
 
 		if (latestGameState.has_value())
 		{
 			GameState &gs = latestGameState.value();
 
-			// This is the REPLICATION step.
-			// We loop through the players in the GameState from the server.
+			// Loop through the players in the GameState from the server.
 			for (int i = 0; i < gs.num_clients; ++i)
 			{
 				PlayerState &serverPlayer = gs.players[i];
 
-				// NETWORKING: First-time connection logic to find out our ID
+				// If the ID is -1 (just created), we need to get a new client ID.
 				if (myClientId == -1)
 				{
-					// Let's assume the server adds players in order and the last
-					// one in the list is the one we just requested. This is a
-					// simple but brittle way to do it. A real handshake is better.
+					// Client ID is equal to the server player's client ID
 					myClientId = serverPlayer.clientId;
 				}
 
@@ -260,12 +255,10 @@ int main(int argc, char *argv[])
 						remotePlayers.at(serverPlayer.clientId).position = {serverPlayer.x, serverPlayer.y};
 					}
 
-					// --- VISUAL COMPONENT CREATION ---
 					// Check if we have a visual RenderComponent for this remote player yet.
 					if (playerRenderers.find(serverPlayer.clientId) == playerRenderers.end())
 					{
 						// If not, create a new RenderComponent for them using the shared player texture.
-						// Note: This passes the texture pointer but doesn't create a new texture from disk, which is efficient.
 						playerRenderers.emplace(serverPlayer.clientId, RenderComponent(playerTexture));
 					}
 				}
