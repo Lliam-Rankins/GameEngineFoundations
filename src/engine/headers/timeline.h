@@ -20,6 +20,7 @@ public:
     void pauseTime();
     void unpauseTime();
     bool isPaused() const;
+    void setTimeScale(float scale);
 
 private:
     // Use the high_resolution_clock's native time_point for maximum precision
