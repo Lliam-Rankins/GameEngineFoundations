@@ -73,3 +73,11 @@ long long Timeline::getElapsedTicks() const {
 float Timeline::getDeltaTime() const {
     return static_cast<float>(m_deltaTimeNs) / 1000000000.0f;
 }
+
+void Timeline::setTimeScale(float scale) {
+    // Set timeScale as long as the param is inclusively between .5 and 2
+    if(!((scale >= 0.5) && (scale <= 2.0))) {
+        return;
+    }
+    m_timeScale = scale;
+}

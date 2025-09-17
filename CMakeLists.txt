@@ -15,6 +15,7 @@ add_executable(client
     ./src/engine/components/physics.cpp
     ./src/engine/components/collisions.cpp
     ./src/engine/components/network.cpp
+    ./src/engine/components/timeline.cpp
 )
 
 target_compile_definitions(client PRIVATE IS_CLIENT)

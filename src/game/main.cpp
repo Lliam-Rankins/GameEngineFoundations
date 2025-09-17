@@ -8,6 +8,7 @@
 #include "../engine/headers/protocol.h"
 #include "../engine/headers/entities.h"
 #include "../engine/headers/input.h"
+#include "../engine/headers/timeline.h"
 #include <map>
 #include <SDL3_image/SDL_image.h>
 #include <iostream>
@@ -58,6 +59,8 @@ int main(int argc, char *argv[])
 	if (!policeTexture)
 		textureError();
 
+	// Create a timeline and a network manager
+	Timeline mainTimeline;
 	NetworkManager networkManager;
 
 	// Request port 5555 and subscribe port 5556
@@ -65,6 +68,7 @@ int main(int argc, char *argv[])
 	const int SUBSCRIBE_PORT = 5556;
 	networkManager.startClient("localhost", REQUEST_PORT, SUBSCRIBE_PORT);
 
+	// Get back a client ID.
 	int myClientId = networkManager.connectAndHandshake();
 
 	if (myClientId == -1)
@@ -90,7 +94,7 @@ int main(int argc, char *argv[])
 		platPos.y + platDim.y / 2.0f);
 	platform.setCollider(&platformCollider);
 
-	// NETWORKING: Create ONE entity for the player this client controls.
+	// Create a local player for this particular client.
 	Vector playerPos = {WINDOW_WIDTH / 2, platPos.y - 100};
 	Vector playerDim = {71, 67};
 	Entity localPlayer(playerPos, playerDim, {0, 0}, true);
@@ -102,16 +106,16 @@ int main(int argc, char *argv[])
 		playerPos.y + playerDim.y / 2.0f);
 	localPlayer.setCollider(&playerCollider);
 
-	// NETWORKING: Create a map to hold all the OTHER players.
-	// The key is their unique client ID, and the value is their Entity object.
+	// Create a map to hold all the other remote players with key as their ID and entity as the value
 	std::map<int, Entity> remotePlayers;
 
+	// Do the same thing for each of their renderers
 	std::map<int, RenderComponent> playerRenderers;
 
 	// Create the RenderComponent for our local player
 	playerRenderers.emplace(myClientId, RenderComponent(playerTexture));
 
-	// You would also create RenderComponents for the platform, police car, etc.
+	// Create render components for the platform and police car
 	RenderComponent platformRenderer(platformTexture);
 	RenderComponent policeRenderer(policeTexture);
 
@@ -138,13 +142,21 @@ int main(int argc, char *argv[])
 	// Scaling Type bool
 	bool constantSizeScale = true;
 
-	// Variables to track the previous state of toggle keys to prevent flickering.
+	// Variables to track the previous state of toggle keys to prevent flickering. These are for scaling, making player spawn, and time management
 	bool eKeyWasPressedLastFrame = false;
 	bool graveKeyWasPressedLastFrame = false;
+	bool pKeyWasPressedLastFrame = false;
+	bool oKeyWasPressedLastFrame = false;
+	bool minusKeyWasPressedLastFrame = false;
+	bool equalsKeyWasPressedLastFrame = false;
 
 	// The main game loop
 	while (running)
 	{
+
+		// Update the timeline and get the current delta time.
+		mainTimeline.update();
+		float dt = mainTimeline.getDeltaTime();
 
 		while (SDL_PollEvent(&event))
 		{
@@ -156,6 +168,10 @@ int main(int argc, char *argv[])
 
 		bool eKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_E);
 		bool graveKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_GRAVE);
+		bool oKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_O);
+		bool pKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_P);
+		bool minusKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_MINUS);
+		bool equalsKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_EQUALS);
 
 		// Toggle player visibility only on the frame the 'E' key is first pressed.
 		if (eKeyIsPressedNow && !eKeyWasPressedLastFrame)
@@ -171,10 +187,38 @@ int main(int argc, char *argv[])
 		{
 			constantSizeScale = !constantSizeScale;
 		}
+		// === TIMELINE INTEGRATION 4: KEYBOARD CONTROLS FOR TIME ===
+		if (pKeyIsPressedNow && !pKeyWasPressedLastFrame)
+		{
+			mainTimeline.pauseTime();
+			std::cout << "Timeline Paused." << std::endl;
+		}
+		if (oKeyIsPressedNow && !oKeyWasPressedLastFrame)
+		{
+			mainTimeline.unpauseTime();
+			std::cout << "Timeline Unpaused." << std::endl;
+		}
+		if (minusKeyIsPressedNow && !minusKeyWasPressedLastFrame)
+		{
+			mainTimeline.setTimeScale(0.5); // Slow motion
+			std::cout << "Time scale set to 0.5x" << std::endl;
+		}
+		if (equalsKeyIsPressedNow && !equalsKeyWasPressedLastFrame)
+		{
+			mainTimeline.setTimeScale(2.0); // Fast-forward
+			std::cout << "Time scale set to 2.0x" << std::endl;
+		}
 
-		// Update the tracking variables for the next frame.
+		// You might want a key to reset time scale to 1.0 as well.
+		// TODO: this *******************************************
+
+		// Update last frame key states
 		eKeyWasPressedLastFrame = eKeyIsPressedNow;
 		graveKeyWasPressedLastFrame = graveKeyIsPressedNow;
+		pKeyWasPressedLastFrame = pKeyIsPressedNow;
+		oKeyWasPressedLastFrame = oKeyIsPressedNow;
+		minusKeyWasPressedLastFrame = minusKeyIsPressedNow;
+		equalsKeyWasPressedLastFrame = equalsKeyIsPressedNow;
 
 		// Constant Scaling
 		if (constantSizeScale)
@@ -197,18 +241,23 @@ int main(int argc, char *argv[])
 		{
 			running = false;
 		}
+
+		// Reset the player's velocity
+		localPlayer.velocity.x = 0;
+
 		if (isKeyPressed(SDL_SCANCODE_A))
 		{
-			localPlayer.velocity.x = -5.0f;
+			localPlayer.velocity.x = -250.0f; // Velocity in pixels per second
 		}
 		if (isKeyPressed(SDL_SCANCODE_D))
 		{
-			localPlayer.velocity.x = 5.0f;
+			localPlayer.velocity.x = 250.0f; // Velocity in pixels per second
 		}
 
+		// Jump is an impulse (instantaneous change), so it doesn't use dt.
 		if (isKeyPressed(SDL_SCANCODE_SPACE))
 		{
-			localPlayer.velocity.y = -30;
+			localPlayer.velocity.y = -900.0f; // A stronger jump impulse
 		}
 
 		localPlayer.updatePosition();
@@ -277,15 +326,20 @@ int main(int argc, char *argv[])
 		if (police.position.x < leftBound)
 			police.velocity = {1, 0};
 
-		police.updatePosition();
+		// === TIMELINE INTEGRATION 6: TIME-CORRECTED MOVEMENT ===
+		// Update police position based on velocity over time.
+		police.position.x += police.velocity.x * dt;
 
+		// Apply gravity to the player (acceleration over time).
 		if (localPlayer.physicsApplied)
 		{
-			localPlayer.velocity.y += WorldPhysics::getGravity();
+			// Gravity is now an acceleration (pixels per second, per second)
+			localPlayer.velocity.y += WorldPhysics::getGravity() * dt;
 		}
 
-		localPlayer.position.x += localPlayer.velocity.x;
-		localPlayer.position.y += localPlayer.velocity.y;
+		// Update player position based on velocity over time.
+		localPlayer.position.x += localPlayer.velocity.x * dt;
+		localPlayer.position.y += localPlayer.velocity.y * dt;
 		SyncColliderToEntity(localPlayer);
 
 		// Collision check
