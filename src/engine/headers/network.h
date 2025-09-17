@@ -32,6 +32,7 @@ public:
      * @param serverAddress the address of the server
      * @param requestPort the port for requests
      * @param subscribePort the port for subscribes
+     * @return whether or not the client was successfully started
      */
     bool startClient(const std::string &serverAddress, int requestPort, int subscribePort);
 
@@ -49,6 +50,17 @@ public:
      * Function that runs constantly to update client and server state.
      */
     void update();
+
+    /**
+     * Connects to the server and performs a handshake to get a client ID.
+     * @return The unique client ID assigned by the server, or -1 on failure.
+     */
+    int connectAndHandshake();
+
+    /**
+     * Gets the latest game state information
+     */
+    std::optional<GameState> getLatestGameState();
 
 private:
     // Enum to track whether we are a server, a client, or uninitialized.
@@ -76,4 +88,8 @@ private:
 
     // A complete game state object
     GameState m_gameState;
+
+    // A flag for if we have received the first game state
+    bool m_hasReceivedFirstState;
+
 };
