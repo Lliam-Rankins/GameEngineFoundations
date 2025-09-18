@@ -44,9 +44,6 @@ int main(int argc, char *argv[])
 	// Initialize the window and renderer using SDL method
 	createWindowAndRenderer(&window, &renderer);
 
-	// Don't show the player initially
-	bool showPlayer = false;
-
 	SDL_Texture *platformTexture = IMG_LoadTexture(renderer, "media/warped city files/warped city files/Assets/ENVIRONMENT/props/control-box-3.png");
 	if (!platformTexture)
 		textureError();
@@ -95,8 +92,10 @@ int main(int argc, char *argv[])
 	platform.setCollider(&platformCollider);
 
 	// Create a local player for this particular client.
-	Vector playerPos = {WINDOW_WIDTH / 2, platPos.y - 100};
 	Vector playerDim = {71, 67};
+	Vector playerPos = {
+		WINDOW_WIDTH / 2.0f,
+		platPos.y - (platDim.y / 2.0f) - (playerDim.y / 2.0f)};
 	Entity localPlayer(playerPos, playerDim, {0, 0}, true);
 
 	Collider playerCollider(
@@ -105,6 +104,7 @@ int main(int argc, char *argv[])
 		playerPos.x + playerDim.x / 2.0f,
 		playerPos.y + playerDim.y / 2.0f);
 	localPlayer.setCollider(&playerCollider);
+	SyncColliderToEntity(localPlayer);
 
 	// Create a map to hold all the other remote players with key as their ID and entity as the value
 	std::map<int, Entity> remotePlayers;
@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
 
 	Vector policePos = {platPos.x - 100, platPos.y + 50};
 	Vector policeDim = {163, 60};
-	vel = {1, 0};
+	vel = {150.0f, 0};
 
 	Entity police(policePos, policeDim, vel, false);
 
@@ -143,7 +143,6 @@ int main(int argc, char *argv[])
 	bool constantSizeScale = true;
 
 	// Variables to track the previous state of toggle keys to prevent flickering. These are for scaling, making player spawn, and time management
-	bool eKeyWasPressedLastFrame = false;
 	bool graveKeyWasPressedLastFrame = false;
 	bool pKeyWasPressedLastFrame = false;
 	bool oKeyWasPressedLastFrame = false;
@@ -166,21 +165,11 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		bool eKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_E);
 		bool graveKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_GRAVE);
 		bool oKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_O);
 		bool pKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_P);
 		bool minusKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_MINUS);
 		bool equalsKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_EQUALS);
-
-		// Toggle player visibility only on the frame the 'E' key is first pressed.
-		if (eKeyIsPressedNow && !eKeyWasPressedLastFrame)
-		{
-			showPlayer = !showPlayer;
-			localPlayer.position = {WINDOW_WIDTH / 2.0f, platPos.y - 300.0f};
-			localPlayer.velocity = {0, 0};
-			SyncColliderToEntity(localPlayer);
-		}
 
 		// Toggle scaling mode only on the frame the '`' key is first pressed.
 		if (graveKeyIsPressedNow && !graveKeyWasPressedLastFrame)
@@ -213,7 +202,6 @@ int main(int argc, char *argv[])
 		// TODO: this *******************************************
 
 		// Update last frame key states
-		eKeyWasPressedLastFrame = eKeyIsPressedNow;
 		graveKeyWasPressedLastFrame = graveKeyIsPressedNow;
 		pKeyWasPressedLastFrame = pKeyIsPressedNow;
 		oKeyWasPressedLastFrame = oKeyIsPressedNow;
@@ -247,17 +235,17 @@ int main(int argc, char *argv[])
 
 		if (isKeyPressed(SDL_SCANCODE_A))
 		{
-			localPlayer.velocity.x = -250.0f; // Velocity in pixels per second
+			localPlayer.velocity.x = -5.0f; // Velocity in pixels per second
 		}
 		if (isKeyPressed(SDL_SCANCODE_D))
 		{
-			localPlayer.velocity.x = 250.0f; // Velocity in pixels per second
+			localPlayer.velocity.x = 5.0f; // Velocity in pixels per second
 		}
 
 		// Jump is an impulse (instantaneous change), so it doesn't use dt.
 		if (isKeyPressed(SDL_SCANCODE_SPACE))
 		{
-			localPlayer.velocity.y = -900.0f; // A stronger jump impulse
+			localPlayer.velocity.y = -5.0f; // A stronger jump impulse
 		}
 
 		localPlayer.updatePosition();
@@ -322,9 +310,9 @@ int main(int argc, char *argv[])
 		int rightBound = policePos.x + 100;
 
 		if (police.position.x > rightBound)
-			police.velocity = {-1, 0};
+			police.velocity = {-150.0f, 0};
 		if (police.position.x < leftBound)
-			police.velocity = {1, 0};
+			police.velocity = {150.0f, 0};
 
 		// === TIMELINE INTEGRATION 6: TIME-CORRECTED MOVEMENT ===
 		// Update police position based on velocity over time.
@@ -363,8 +351,8 @@ int main(int argc, char *argv[])
 		platformRenderer.render(renderer, platform.position, platform.dimensions);
 		policeRenderer.render(renderer, police.position, police.dimensions);
 
-		// Render the local player (only when showPlayer is true)
-		if (showPlayer && playerRenderers.count(myClientId))
+		// Render the local player
+		if (playerRenderers.count(myClientId))
 		{
 			playerRenderers.at(myClientId).render(renderer, localPlayer.position, localPlayer.dimensions);
 		}
@@ -384,9 +372,9 @@ int main(int argc, char *argv[])
 		refreshScreen(renderer);
 	}
 
-	// SDL_DestroyTexture(playerTexture);
-	// SDL_DestroyTexture(platformTexture);
-	// SDL_DestroyTexture(policeTexture);
+	SDL_DestroyTexture(playerTexture);
+	SDL_DestroyTexture(platformTexture);
+	SDL_DestroyTexture(policeTexture);
 
 	networkManager.cleanUp();
 	SDL_DestroyRenderer(renderer);
