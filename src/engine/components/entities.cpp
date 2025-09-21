@@ -19,12 +19,6 @@ Entity::~Entity()
 {
 }
 
-// These functions are available to both client and server as they don't use textures.
-void Entity::setCollider(Collider *newCollider)
-{
-	this->collider = newCollider;
-}
-
 void Entity::makeCollider()
 {
 	this->collider = new Collider(this->position.x, this->position.y, this->position.x + this->dimensions.x, this->position.y + this->dimensions.y);
@@ -44,4 +38,79 @@ void Entity::updatePosition()
 		this->collider->bottomRight.x = this->position.x + this->dimensions.x / 2.0f;
 		this->collider->bottomRight.y = this->position.y + this->dimensions.y / 2.0f;
 	}
+}
+
+
+// Getters
+Vector Entity::getPosition() {
+	pthread_mutex_lock(&entityLock);
+	Vector returnPosition = this->position;
+	pthread_mutex_unlock(&entityLock);
+
+	return returnPosition;
+}
+
+Vector Entity::getDimensions() {
+	pthread_mutex_lock(&entityLock);
+	Vector returnDimensions = this->dimensions;
+	pthread_mutex_unlock(&entityLock);
+
+	return returnDimensions;
+}
+
+Vector Entity::getVelocity() {
+	pthread_mutex_lock(&entityLock);
+	Vector returnVelocity = this->velocity;
+	pthread_mutex_unlock(&entityLock);
+
+	return returnVelocity;
+}
+
+bool Entity::getPhysicsApplied() {
+	pthread_mutex_lock(&entityLock);
+	bool returnPhysicsApplied = this->physicsApplied;
+	pthread_mutex_unlock(&entityLock);
+
+	return returnPhysicsApplied;
+}
+
+Collider Entity::getCollider() {
+	pthread_mutex_lock(&entityLock);
+	Collider returnCollider = *this->collider;
+	pthread_mutex_unlock(&entityLock);
+
+	return returnCollider;
+}
+
+
+
+// Setters
+void Entity::setPosition(Vector newPosition) {
+	pthread_mutex_lock(&entityLock);
+	this->position = newPosition;
+	pthread_mutex_unlock(&entityLock);
+}
+
+void Entity::setDimensions(Vector newDimensions) {
+	pthread_mutex_lock(&entityLock);
+	this->dimensions = newDimensions;
+	pthread_mutex_unlock(&entityLock);
+}
+
+void Entity::setVelocity(Vector newVelocity) {
+	pthread_mutex_lock(&entityLock);
+	this->velocity = newVelocity;
+	pthread_mutex_unlock(&entityLock);
+}
+
+void Entity::setPhysicsApplied(bool newPhysicsApplied) { 
+	pthread_mutex_lock(&entityLock);
+	this->physicsApplied = physicsApplied;
+	pthread_mutex_unlock(&entityLock);
+}
+
+void Entity::setCollider(Collider *newCollider) {
+	pthread_mutex_lock(&entityLock);
+	this->collider = newCollider;
+	pthread_mutex_unlock(&entityLock);
 }
