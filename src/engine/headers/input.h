@@ -4,4 +4,10 @@
 
 #pragma once
 
+#include <pthread.h>
+
+
+// Mutex Lock for Input
+pthread_mutex_t inputLock;
+
 bool isKeyPressed(int scancode);
