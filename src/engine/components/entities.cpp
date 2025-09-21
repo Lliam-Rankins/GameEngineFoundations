@@ -6,18 +6,89 @@
 #include <SDL3/SDL.h> // Included for SDL_QueryTexture if needed
 
 /*
- * Constructs a basic entity.
- */
-Entity::Entity(Vector pos, Vector dim, Vector vel, bool phys)
-	: position(pos), dimensions(dim), velocity(vel),
-	  physicsApplied(phys), collider(nullptr)
-{
+ * --------------------AI USE CITATION---------------------
+ * AI was used to refactor the original code written for the constructors
+ * which cleaned bugs and followed best practices for constructors.
+ * - hplenham
+*/
+
+////////////////////////////////////////////
+//
+//	Entity Constructors & Destructor
+//
+////////////////////////////////////////////
+
+/*
+* Constructs an entity with default parameters.
+*/
+Entity::Entity()
+	: position{ 0, 0 }, dimensions{ 0, 0 }, velocity{0, 0}, physicsApplied(false), texture(nullptr) {
+}
+
+/*
+* Constructs an entity with full parameters except velocity.
+* @param pos the entity's position
+* @param dim the entity's dimensions
+* @param tex the SDL texture
+* @param physics whether or not physics is enabled for this entity
+*/
+Entity::Entity(const Vector position, const Vector dimension, SDL_Texture* texture, bool physics)
+	: position(position), dimensions(dimension), physicsApplied(physics), texture(texture) {
+        velocity = Vector{0, 0};
+}
+
+/*
+* Constructs an entity with full parameters except velocity & dimensions.
+* @param pos the entity's position
+* @param tex the SDL texture
+* @param physics whether or not physics is enabled for this entity
+*/
+Entity::Entity(const Vector pos, SDL_Texture* tex, bool physics)
+	: position(pos),  physicsApplied(physics), texture(tex) {
+        velocity = Vector{0, 0};
+        dimensions = Vector{(float)tex->w, (float)tex->h};
+}
+
+/*
+* Constructs an entity with full parameters except Dimensions.
+* @param pos the entity's position
+* @param dim the entity's dimensions
+* @param tex the SDL texture
+* @param vel the entity's velocity
+* @param physics whether or not physics is enabled for this entity
+*/
+Entity::Entity(const Vector pos, SDL_Texture* tex, Vector vel, bool physics)
+	: position(pos),  physicsApplied(physics), velocity(vel), texture(tex) {
+        dimensions = Vector{(float)tex->w, (float)tex->h};
+}
+
+/*
+* Constructs an entity with full parameters.
+* @param pos the entity's position
+* @param dim the entity's dimensions
+* @param tex the SDL texture
+* @param physics whether or not physics is enabled for this entity
+* @param vel the entity's velocity
+*/
+Entity::Entity(const Vector pos, const Vector dim, SDL_Texture* tex, bool physics, const Vector vel)
+	: position(pos), dimensions(dim), velocity(vel), physicsApplied(physics), texture(tex) {
 }
 
 // Destructor
 Entity::~Entity()
 {
+	if (texture) {
+        SDL_DestroyTexture(texture);
+        texture = nullptr;
+    }
 }
+
+
+////////////////////////////////////////////
+//
+//	Entity Funcs
+//
+////////////////////////////////////////////
 
 void Entity::makeCollider()
 {
@@ -40,6 +111,22 @@ void Entity::updatePosition()
 	}
 }
 
+// Update Collider
+void Entity::updateCollider() {
+    if(this->collider != nullptr) {
+        this->collider->topLeft.x = this->position.x;
+    	this->collider->topLeft.y = this->position.y;
+    	this->collider->bottomRight.x = this->position.x + this->dimensions.x;
+    	this->collider->bottomRight.y = this->position.y + this->dimensions.y;
+    }
+}
+
+
+////////////////////////////////////////////
+//
+//	Getters
+//
+////////////////////////////////////////////
 
 // Getters
 Vector Entity::getPosition() {
@@ -83,6 +170,11 @@ Collider Entity::getCollider() {
 }
 
 
+////////////////////////////////////////////
+//
+//	Setters
+//
+////////////////////////////////////////////
 
 // Setters
 void Entity::setPosition(Vector newPosition) {
