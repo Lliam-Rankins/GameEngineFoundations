@@ -4,6 +4,7 @@
 #include "../engine/headers/render.h"
 #include "../engine/headers/physics.h"
 #include "../engine/headers/collisions.h"
+#include "../engine/headers/input.h"
 
 SDL_Renderer *renderer = nullptr;
 SDL_Window *window = nullptr;

@@ -4,25 +4,22 @@
 #ifndef PHYSICS_H
 #define PHYSICS_H
 
-pthread_mutex_t physicsLock;
+#include <atomic>
 
 class WorldPhysics {
     public:
 
     //Use these functions to set and get the gravity variable to apply to entities
     static void setGravity(const int gravity) {
-        pthread_mutex_lock(&physicsLock);
-        gravityWeight = gravity;
-        pthread_mutex_unlock(&physicsLock);
+        
+        WorldPhysics::gravityWeight = gravity;
     };
     static int getGravity() {
-        pthread_mutex_lock(&physicsLock);
-        return gravityWeight;
-        pthread_mutex_unlock(&physicsLock);
+        return WorldPhysics::gravityWeight;
     };
 
     private:
-    static int gravityWeight;
+    static std::atomic<int> gravityWeight;
 };
 
 #endif

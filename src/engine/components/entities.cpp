@@ -97,6 +97,7 @@ void Entity::makeCollider()
 
 void Entity::updatePosition()
 {
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
 	// Apply velocity to position
 	this->position.x += this->velocity.x;
 	this->position.y += this->velocity.y;
@@ -113,11 +114,13 @@ void Entity::updatePosition()
 
 // Update Collider
 void Entity::updateCollider() {
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
     if(this->collider != nullptr) {
-        this->collider->topLeft.x = this->position.x;
-    	this->collider->topLeft.y = this->position.y;
-    	this->collider->bottomRight.x = this->position.x + this->dimensions.x;
-    	this->collider->bottomRight.y = this->position.y + this->dimensions.y;
+		Vector newTopLeft = Vector(this->position.x, this->position.y);
+		Vector newBottomRight = Vector(this->position.x + this->dimensions.x, this->position.y + this->dimensions.y);
+        
+		this->collider->setTopLeft(newTopLeft);
+		this->collider->setBottomRight(newBottomRight);
     }
 }
 
@@ -130,45 +133,24 @@ void Entity::updateCollider() {
 
 // Getters
 Vector Entity::getPosition() {
-	pthread_mutex_lock(&entityLock);
-	Vector returnPosition = this->position;
-	pthread_mutex_unlock(&entityLock);
-
-	return returnPosition;
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
+	return this->position;
 }
 
 Vector Entity::getDimensions() {
-	pthread_mutex_lock(&entityLock);
-	Vector returnDimensions = this->dimensions;
-	pthread_mutex_unlock(&entityLock);
-
-	return returnDimensions;
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
+	return this->dimensions;
 }
 
 Vector Entity::getVelocity() {
-	pthread_mutex_lock(&entityLock);
-	Vector returnVelocity = this->velocity;
-	pthread_mutex_unlock(&entityLock);
-
-	return returnVelocity;
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
+	return this->velocity;
 }
 
 bool Entity::getPhysicsApplied() {
-	pthread_mutex_lock(&entityLock);
-	bool returnPhysicsApplied = this->physicsApplied;
-	pthread_mutex_unlock(&entityLock);
-
-	return returnPhysicsApplied;
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
+	return this->physicsApplied;
 }
-
-Collider Entity::getCollider() {
-	pthread_mutex_lock(&entityLock);
-	Collider returnCollider = *this->collider;
-	pthread_mutex_unlock(&entityLock);
-
-	return returnCollider;
-}
-
 
 ////////////////////////////////////////////
 //
@@ -178,31 +160,26 @@ Collider Entity::getCollider() {
 
 // Setters
 void Entity::setPosition(Vector newPosition) {
-	pthread_mutex_lock(&entityLock);
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
 	this->position = newPosition;
-	pthread_mutex_unlock(&entityLock);
 }
 
 void Entity::setDimensions(Vector newDimensions) {
-	pthread_mutex_lock(&entityLock);
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
 	this->dimensions = newDimensions;
-	pthread_mutex_unlock(&entityLock);
 }
 
 void Entity::setVelocity(Vector newVelocity) {
-	pthread_mutex_lock(&entityLock);
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
 	this->velocity = newVelocity;
-	pthread_mutex_unlock(&entityLock);
 }
 
 void Entity::setPhysicsApplied(bool newPhysicsApplied) { 
-	pthread_mutex_lock(&entityLock);
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
 	this->physicsApplied = physicsApplied;
-	pthread_mutex_unlock(&entityLock);
 }
 
 void Entity::setCollider(Collider *newCollider) {
-	pthread_mutex_lock(&entityLock);
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
 	this->collider = newCollider;
-	pthread_mutex_unlock(&entityLock);
 }

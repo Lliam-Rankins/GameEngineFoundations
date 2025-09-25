@@ -5,6 +5,7 @@
 #pragma once
 
 #include <chrono>
+#include <atomic>
 // Timeline class to maintain a time-state for the game
 class Timeline
 {
@@ -28,14 +29,14 @@ private:
     std::chrono::high_resolution_clock::time_point m_lastUpdateTime;
 
     // Store durations in nanoseconds using int64_t (long long)
-    long long m_tickSizeNs; // The duration of a single "tick" in nanoseconds
-    long long m_totalElapsedNs;
-    long long m_deltaTimeNs;
+    std::atomic<long long> m_tickSizeNs; // The duration of a single "tick" in nanoseconds
+    std::atomic<long long> m_totalElapsedNs;
+    std::atomic<long long> m_deltaTimeNs;
 
     // Variables for pausing
     std::chrono::high_resolution_clock::time_point m_pauseStartTime;
-    long long m_totalPausedNs;
+    std::atomic<long long> m_totalPausedNs;
 
-    double m_timeScale;
-    bool m_isPaused;
+    std::atomic<double> m_timeScale;
+    std::atomic<bool> m_isPaused;
 };

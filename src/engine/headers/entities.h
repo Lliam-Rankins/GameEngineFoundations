@@ -1,16 +1,19 @@
 #ifndef ENTITIES_H
 #define ENTITIES_H
 
-#include <pthread.h>
+#include <mutex>
+#include <atomic>
 #include "struct.h"
 #include "collisions.h"
 
-// Mutex Lock for Entity
-pthread_mutex_t entityLock;
+
 
 class Entity
 {
 public:
+    // Mutex Lock for Entity
+    std::mutex entityMutex;
+
     // A simple constructor for our data-only entity
     Entity(Vector pos = {0,0}, Vector dim = {0,0}, Vector vel = {0,0}, bool phys = false);
     ~Entity();
