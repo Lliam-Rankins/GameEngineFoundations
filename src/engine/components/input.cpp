@@ -14,6 +14,7 @@
 */
 bool isKeyPressed(int scancode) {
 	// A boolean value that represents the state of the keyboard - it's actually an array.
+	std::unique_lock<std::mutex> cv_lock(inputMutex);
 	const bool* keystate = SDL_GetKeyboardState(nullptr);
 	return keystate[scancode] != 0;
 }

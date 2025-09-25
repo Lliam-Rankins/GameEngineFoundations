@@ -4,15 +4,22 @@
 #ifndef PHYSICS_H
 #define PHYSICS_H
 
+#include <atomic>
+
 class WorldPhysics {
     public:
 
     //Use these functions to set and get the gravity variable to apply to entities
-    static void setGravity(const int gravity) {gravityWeight = gravity;};
-    static int getGravity() {return gravityWeight;};
+    static void setGravity(const int gravity) {
+        
+        WorldPhysics::gravityWeight = gravity;
+    };
+    static int getGravity() {
+        return WorldPhysics::gravityWeight;
+    };
 
     private:
-    static int gravityWeight;
+    static std::atomic<int> gravityWeight;
 };
 
 #endif

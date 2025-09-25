@@ -4,6 +4,7 @@
 #include "../engine/headers/render.h"
 #include "../engine/headers/physics.h"
 #include "../engine/headers/collisions.h"
+#include "../engine/headers/input.h"
 #include "../engine/headers/network.h"
 #include "../engine/headers/protocol.h"
 #include "../engine/headers/entities.h"
@@ -12,6 +13,7 @@
 #include <map>
 #include <SDL3_image/SDL_image.h>
 #include <iostream>
+
 
 SDL_Renderer *renderer = nullptr;
 SDL_Window *window = nullptr;

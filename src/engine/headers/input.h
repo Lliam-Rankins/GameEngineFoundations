@@ -4,4 +4,10 @@
 
 #pragma once
 
+
+#include <mutex>
+
+// Mutex Lock for Input
+std::mutex inputMutex;
+
 bool isKeyPressed(int scancode);

@@ -23,7 +23,6 @@ target_compile_definitions(client PRIVATE IS_CLIENT)
 add_executable(server
     ./src/engine/components/server.cpp
     ./src/engine/components/network.cpp
-    ./src/engine/components/entities.cpp # Needed for PlayerState/GameState structs if they use Entity
 )
 
 set(MEDIA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/media")
@@ -38,3 +37,4 @@ add_custom_command(
 
 target_link_libraries(client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
 target_link_libraries(server PRIVATE cppzmq)
+

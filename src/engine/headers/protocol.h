@@ -15,3 +15,11 @@ struct GameState {
     int num_clients = 0; // How many players are currently connected.
     PlayerState players[MAX_PLAYERS]; // An array holding the state of every player.
 };
+
+// State of a non-player (server-controlled) character
+struct NPCState {
+    // Any generic object ID that can be used to represent the NPC
+    int objectId;
+    float x;
+    float y;
+};
