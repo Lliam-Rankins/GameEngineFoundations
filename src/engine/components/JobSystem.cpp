@@ -1,4 +1,4 @@
-#include "JobSystem.hpp"
+#include "../headers/jobSystem.h"
 #include <cstddef>
 
 // Worker thread for jobs

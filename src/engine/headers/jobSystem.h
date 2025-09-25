@@ -1,7 +1,7 @@
 #pragma once
 #include <functional>
 #include <vector>
-#include "sharedData.hpp"
+#include "sharedData.h"
 
 using Job = std::function<void()>;
 using JobQueue = std::vector<Job>;
