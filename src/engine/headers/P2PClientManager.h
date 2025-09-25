@@ -9,6 +9,11 @@
 #include <memory>
 #include "../headers/protocol.h"
 
+struct AllUpdates {
+    std::vector<PlayerState> player_states;
+    std::vector<NPCState> npc_states;
+};
+
 class P2PClientManager {
 public:
     P2PClientManager();
@@ -25,6 +30,9 @@ public:
 
     // Cleans up ZMQ resources.
     void clean_up();
+
+    // This function now polls both peers and the server and returns all updates.
+    AllUpdates poll_updates();
 
     int get_my_id() const;
 
