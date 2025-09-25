@@ -97,6 +97,43 @@ void P2PClientManager::update_peer_connections(const std::string& peer_list_str)
     }
 }
 
+AllUpdates P2PClientManager::poll_updates() {
+    AllUpdates all_updates;
+
+    // 1. Check for messages from the Authoritative Server (matchmaker)
+    zmq::message_t server_msg;
+    if (m_matchmaker_subscriber->recv(server_msg, zmq::recv_flags::dontwait)) {
+        std::string server_msg_str = server_msg.to_string();
+        std::stringstream ss(server_msg_str);
+        std::string prefix;
+        std::getline(ss, prefix, '|');
+
+        if (prefix == "PEERS") {
+            // This is a peer list update
+            std::string peer_data = server_msg_str.substr(prefix.length() + 1);
+            update_peer_connections(peer_data);
+        } else if (prefix == "NPCS") {
+            // This is an NPC state update
+            const char* data_start = static_cast<const char*>(server_msg.data()) + prefix.length() + 1;
+            size_t data_size = server_msg.size() - (prefix.length() + 1);
+            if (data_size == sizeof(NPCState)) {
+                 const NPCState* state = reinterpret_cast<const NPCState*>(data_start);
+                 all_updates.npc_states.push_back(*state);
+            }
+        }
+    }
+
+    // 2. Poll all connected peers for their player state
+    for (auto const& [id, socket] : m_peer_subscribers) {
+        zmq::message_t peer_msg;
+        if (socket->recv(peer_msg, zmq::recv_flags::dontwait)) {
+            if (peer_msg.size() == sizeof(PlayerState)) {
+                all_updates.player_states.push_back(*peer_msg.data<PlayerState>());
+            }
+        }
+    }
+    return all_updates;
+}
 
 int P2PClientManager::get_my_id() const {
     return m_my_id;

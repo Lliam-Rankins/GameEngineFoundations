@@ -8,6 +8,8 @@
 
 #include "../headers/input.h"
 
+std::mutex inputMutex;
+
 /*
 * This function determines if a certain key is pressed.
 * @param scancode the number of the key.

@@ -1,5 +1,8 @@
 /*
 	This is a file that runs the main loop.
+	Some of the content in this file was generated with Gemini 2.5 Pro.
+	This citation is to abide by the syllabus requirement that "appropriate citations"
+	must be given when referring to external sources.
 */
 #include "../engine/headers/render.h"
 #include "../engine/headers/physics.h"
@@ -11,9 +14,9 @@
 #include "../engine/headers/input.h"
 #include "../engine/headers/timeline.h"
 #include <map>
+#include <memory>
 #include <SDL3_image/SDL_image.h>
 #include <iostream>
-
 
 SDL_Renderer *renderer = nullptr;
 SDL_Window *window = nullptr;
@@ -109,7 +112,7 @@ int main(int argc, char *argv[])
 	SyncColliderToEntity(localPlayer);
 
 	// Create a map to hold all the other remote players with key as their ID and entity as the value
-	std::map<int, Entity> remotePlayers;
+	std::map<int, std::unique_ptr<Entity>> remotePlayers;
 
 	// Do the same thing for each of their renderers
 	std::map<int, RenderComponent> playerRenderers;
@@ -285,19 +288,21 @@ int main(int argc, char *argv[])
 					if (remotePlayers.find(serverPlayer.clientId) == remotePlayers.end())
 					{
 						// If not, create a new data-only Entity for them.
-						remotePlayers.emplace(serverPlayer.clientId, Entity({serverPlayer.x, serverPlayer.y}, {71, 67}));
+						remotePlayers[serverPlayer.clientId] = std::make_unique<Entity>(
+							Vector{serverPlayer.x, serverPlayer.y},
+							Vector{71, 67},
+							Vector{0, 0},
+							false);
 						std::cout << "New player joined with ID: " << serverPlayer.clientId << std::endl;
 					}
 					else
 					{
-						// If they already exist, just update their position data.
-						remotePlayers.at(serverPlayer.clientId).position = {serverPlayer.x, serverPlayer.y};
+						// Access via the pointer
+						remotePlayers.at(serverPlayer.clientId)->position = {serverPlayer.x, serverPlayer.y};
 					}
 
-					// Check if we have a visual RenderComponent for this remote player yet.
 					if (playerRenderers.find(serverPlayer.clientId) == playerRenderers.end())
 					{
-						// If not, create a new RenderComponent for them using the shared player texture.
 						playerRenderers.emplace(serverPlayer.clientId, RenderComponent(playerTexture));
 					}
 				}
@@ -360,15 +365,14 @@ int main(int argc, char *argv[])
 		}
 
 		// Render remote players
-		for (auto const &[id, remote_player] : remotePlayers)
+		for (auto const &[id, remote_player_ptr] : remotePlayers)
 		{
-			// Check if we have a renderer for this remote player yet
 			if (playerRenderers.find(id) == playerRenderers.end())
 			{
-				// If not, create one!
 				playerRenderers.emplace(id, RenderComponent(playerTexture));
 			}
-			playerRenderers.at(id).render(renderer, remote_player.position, remote_player.dimensions);
+			// Use the pointer to get the entity's data
+			playerRenderers.at(id).render(renderer, remote_player_ptr->position, remote_player_ptr->dimensions);
 		}
 
 		refreshScreen(renderer);

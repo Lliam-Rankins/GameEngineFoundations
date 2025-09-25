@@ -2,7 +2,7 @@
 	This is a component file that manages entities.
 */
 
-#include "../headers/entities.hh"
+#include "../headers/entities.h"
 #include <SDL3/SDL.h> // Included for SDL_QueryTexture if needed
 
 /*
@@ -115,7 +115,7 @@ void Entity::setVelocity(Vector newVelocity) {
 	this->velocity = newVelocity;
 }
 
-void Entity::setPhysicsApplied(bool newPhysicsApplied) { 
+void Entity::setPhysicsApplied(bool newPhysicsApplied) {
 	std::unique_lock<std::mutex> cv_lock(entityMutex);
 	this->physicsApplied = newPhysicsApplied;
 }

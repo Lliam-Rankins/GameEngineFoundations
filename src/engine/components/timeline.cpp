@@ -92,23 +92,22 @@ void Timeline::setTimeScale(float scale) {
         return;
     }
     m_timeScale = scale;
-
 }
 
-void timeScaleUp() {
-    if(timeScale == 0.5) {
+void Timeline::timeScaleUp() {
+    if(m_timeScale == 0.5) {
         setTimeScale(1.0);
-    } else if(timeScale == 1.0) {
+    } else if(m_timeScale == 1.0) {
         setTimeScale(2.0);
     } else {
         return;
     }
 }
 
-void timeScaleDown() {
-    if(timeScale == 2.0) {
+void Timeline::timeScaleDown() {
+    if(m_timeScale == 2.0) {
         setTimeScale(1.0);
-    } else if(timeScale == 1.0) {
+    } else if(m_timeScale == 1.0) {
         setTimeScale(0.5);
     } else {
         return;
