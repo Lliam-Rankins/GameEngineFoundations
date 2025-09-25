@@ -92,6 +92,7 @@ void Timeline::setTimeScale(float scale) {
         return;
     }
     m_timeScale = scale;
+
 }
 
 void timeScaleUp() {

@@ -4,6 +4,7 @@
 #include "../headers/render.h"
 #include "../headers/physics.h"
 #include "../headers/collisions.h"
+#include <cstdlib>
 
 void initializeSDL() {
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -13,7 +14,7 @@ void initializeSDL() {
 }
 
 void createWindowAndRenderer(SDL_Window** window, SDL_Renderer** renderer) {
-	if (!SDL_CreateWindowAndRenderer("Project", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE, window, renderer)) {
+	if (!SDL_CreateWindowAndRenderer("Project", 1920, 1080, SDL_WINDOW_RESIZABLE, window, renderer)) {
 		SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
 		SDL_Quit();
 		exit(1);
@@ -30,15 +31,25 @@ void refreshScreen(SDL_Renderer *renderer) {
 	SDL_RenderPresent(renderer);
 }
 
-void renderEntity(SDL_Renderer* renderer, const Entity& e) {
-    SDL_FRect rect = { e.position.x - e.dimensions.x / 2.0f, e.position.y - e.dimensions.y / 2.0f, e.dimensions.x, e.dimensions.y };
-    SDL_RenderTexture(renderer, e.texture, NULL, &rect);
-}
-
 int textureError(SDL_Renderer *renderer, SDL_Window *window){
 	SDL_Log("Could not load image: %s", SDL_GetError());
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
 	return 1;
+}
+
+RenderComponent::RenderComponent(SDL_Texture* tex) : m_texture(tex) {}
+
+void RenderComponent::render(SDL_Renderer* renderer, const Vector& position, const Vector& dimensions) {
+    if (!m_texture) return;
+
+    SDL_FRect destRect;
+    destRect.x = position.x - dimensions.x / 2.0f;
+    destRect.y = position.y - dimensions.y / 2.0f;
+
+	destRect.w = dimensions.x;
+    destRect.h = dimensions.y;
+
+    SDL_RenderTexture(renderer, m_texture, NULL, &destRect);
 }
