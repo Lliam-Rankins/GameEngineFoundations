@@ -13,6 +13,8 @@ Timeline::Timeline(long long tickSizeMs) {
     m_tickSizeNs = tickSizeMs * 1000000;
     
     // Initialize all duration counters to zero.
+    m_currentTick = 0;
+    m_tickCt = 0;
     m_totalElapsedNs = 0;
     m_deltaTimeNs = 0;
     m_totalPausedNs = 0;
@@ -40,6 +42,16 @@ void Timeline::update() {
         
         // Add this frame's duration to the total elapsed game time.
         m_totalElapsedNs += m_deltaTimeNs;
+
+        // Update the progress on the current tick
+        m_currentTick += m_deltaTimeNs;
+
+        // Handle incrementing ticks if necessary
+        // Ticks can be used by dev to schedule updates for certain parts of a game, ex: can jump every 20 ticks, can walk every 5 ticks
+        if(m_currentTick >= m_tickSizeNs) {
+            m_tickCt++;
+            m_currentTick = 0;
+        }
     }
     
     // Update the 'last update' time to now, resetting for the next frame.
@@ -80,4 +92,24 @@ void Timeline::setTimeScale(float scale) {
         return;
     }
     m_timeScale = scale;
+}
+
+void timeScaleUp() {
+    if(timeScale == 0.5) {
+        setTimeScale(1.0);
+    } else if(timeScale == 1.0) {
+        setTimeScale(2.0);
+    } else {
+        return;
+    }
+}
+
+void timeScaleDown() {
+    if(timeScale == 2.0) {
+        setTimeScale(1.0);
+    } else if(timeScale == 1.0) {
+        setTimeScale(0.5);
+    } else {
+        return;
+    }
 }
