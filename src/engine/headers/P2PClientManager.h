@@ -9,10 +9,10 @@
 #include <memory>
 #include "../headers/protocol.h"
 
-class P2PManager {
+class P2PClientManager {
 public:
-    P2PManager();
-    ~P2PManager();
+    P2PClientManager();
+    ~P2PClientManager();
 
     // Connects to the matchmaker, establishes its own publish port, and subscribes to peers.
     bool join_network(const std::string& matchmaker_address, int matchmaker_port, int my_p2p_port);

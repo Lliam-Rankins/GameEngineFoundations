@@ -2,18 +2,18 @@
 // This citation is to abide by the syllabus requirement that "appropriate citations"
 // must be given when referring to external sources.
 
-#include "../headers/P2PManager.h"
+#include "../headers/P2PClientManager.h"
 #include <iostream>
 #include <sstream>
 #include <thread>
 
-P2PManager::P2PManager() : m_context(std::make_unique<zmq::context_t>(1)) {}
+P2PClientManager::P2PClientManager() : m_context(std::make_unique<zmq::context_t>(1)) {}
 
-P2PManager::~P2PManager() {
+P2PClientManager::~P2PClientManager() {
     clean_up();
 }
 
-bool P2PManager::join_network(const std::string& matchmaker_address, int matchmaker_port, int my_p2p_port) {
+bool P2PClientManager::join_network(const std::string& matchmaker_address, int matchmaker_port, int my_p2p_port) {
     // --- Step 1: Establish our own address and P2P publishing socket ---
     // Clients will connect to this socket to hear from us.
     m_publisher = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::pub);
@@ -45,13 +45,13 @@ bool P2PManager::join_network(const std::string& matchmaker_address, int matchma
     return true;
 }
 
-void P2PManager::broadcast_state(const PlayerState& state) {
+void P2PClientManager::broadcast_state(const PlayerState& state) {
     if (m_publisher) {
         m_publisher->send(zmq::buffer(&state, sizeof(PlayerState)));
     }
 }
 
-std::vector<PlayerState> P2PManager::poll_peer_updates() {
+std::vector<PlayerState> P2PClientManager::poll_peer_updates() {
     std::vector<PlayerState> updates;
 
     // First, check for any new peers from the matchmaker
@@ -72,7 +72,7 @@ std::vector<PlayerState> P2PManager::poll_peer_updates() {
     return updates;
 }
 
-void P2PManager::update_peer_connections(const std::string& peer_list_str) {
+void P2PClientManager::update_peer_connections(const std::string& peer_list_str) {
     std::stringstream ss(peer_list_str);
     std::string segment;
 
@@ -98,11 +98,11 @@ void P2PManager::update_peer_connections(const std::string& peer_list_str) {
 }
 
 
-int P2PManager::get_my_id() const {
+int P2PClientManager::get_my_id() const {
     return m_my_id;
 }
 
-void P2PManager::clean_up() {
+void P2PClientManager::clean_up() {
     // Sockets must be closed before the context is terminated.
     m_publisher.reset();
     m_matchmaker_subscriber.reset();
