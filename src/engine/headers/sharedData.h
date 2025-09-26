@@ -5,7 +5,6 @@
 
 // Shared state for multithreaded system
 struct SharedData {
-    std::atomic<long long> counter{0};
     std::atomic<size_t> nextJobIndex{0};
 
     // Shared network message
