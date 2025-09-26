@@ -240,6 +240,6 @@ void NetworkManager::readClient(int id, int portNum) {
     }
 }
 
-void NetworkManager::updateAllClients() {
+// void NetworkManager::updateAllClients() {
 
-}
+// }

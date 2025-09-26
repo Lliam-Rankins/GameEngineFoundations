@@ -74,7 +74,7 @@ public:
 
     /**
      */
-    void updateAllClients();
+    // void updateAllClients();
 
 private:
     // Enum to track whether we are a server, a client, or uninitialized.
