@@ -25,21 +25,33 @@ NetworkManager::~NetworkManager()
  * @param replyPort the reply port #
  * @param publishPort the publish port #
  */
-bool NetworkManager::startServer(int replyPort, int publishPort)
+bool NetworkManager::startServer(int startReplyPort, int publishPort)
 {
     // Create the context and store it in the member variable
     m_context = std::make_unique<zmq::context_t>(1);
 
     // Create the sockets and store them in the member variables
-    m_replySocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::rep);
+    //m_replySocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::rep);
     m_publishSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::pub);
 
-    std::string replyAddress = "tcp://*:" + std::to_string(replyPort);
+    //std::string replyAddress = "tcp://*:" + std::to_string(replyPort);
     std::string publishAddress = "tcp://*:" + std::to_string(publishPort);
 
     // Bind em
-    m_replySocket->bind(replyAddress);
+    //m_replySocket->bind(replyAddress);
     m_publishSocket->bind(publishAddress);
+
+    for(int i = 0; i < MAX_PLAYERS; i++) {
+        int clientPortNum = startReplyPort + i;
+
+        m_clientArr[i] = (ClientHandler{
+            .clientId = i;
+            .portNum = clientPortNum;
+            .thread = std::thread(&NetworkManager::readClient, this, i, clientPortNum)
+        });
+    }
+
+    m_updateThread = std::thread(&NetworkManager::messageLooper, this);
 
     m_role = Role::SERVER;
 
@@ -134,87 +146,7 @@ int NetworkManager::connectAndHandshake()
     return assignedState.clientId;
 }
 
-/**
- * Updates client and server state
- */
-void NetworkManager::update()
-{
 
-    // If we're the server
-    if (m_role == Role::SERVER)
-    {
-        zmq::message_t request;
-        auto result = m_replySocket->recv(request, zmq::recv_flags::dontwait);
-
-        // Check if we actually received a message from any client
-        if (result.has_value() && result.value() > 0)
-        {
-            PlayerState receivedState = *request.data<PlayerState>();
-
-            // If the ID is -1
-            if (receivedState.clientId == -1)
-            {
-                // This is a new client connecting
-                if (m_gameState.num_clients < MAX_PLAYERS)
-                {
-                    // Assign a new, unique ID
-                    int newId = m_gameState.num_clients;
-                    receivedState.clientId = newId;
-
-                    // Add them to our game state.
-                    m_gameState.players[newId] = receivedState;
-                    m_gameState.num_clients++;
-
-                    std::cout << "New player connected. Assigned ID: " << newId << std::endl;
-
-                    // Send their state back with the update ID.
-                    m_replySocket->send(zmq::buffer(&receivedState, sizeof(PlayerState)));
-                }
-                else
-                {
-                    // Server is full, send a "full" message or an error state.
-                    // For now, we'll just send an empty reply.
-                    m_replySocket->send(zmq::buffer("FULL", 4));
-                }
-            }
-            // Otherwise it's a normal client request
-            else
-            {
-                // This is an existing client sending a regular update.
-                // Find and update the player in our master game state.
-                for (int i = 0; i < m_gameState.num_clients; ++i)
-                {
-                    if (m_gameState.players[i].clientId == receivedState.clientId)
-                    {
-                        m_gameState.players[i] = receivedState;
-                        break;
-                    }
-                }
-
-                // Send a simple "OK" reply to complete the request reply cycle
-                m_replySocket->send(zmq::buffer("OK", 2));
-            }
-        }
-
-        // After handling any incoming requests publish the latest world state
-        m_publishSocket->send(zmq::buffer(&m_gameState, sizeof(GameState)));
-    }
-
-    // If we are a client
-    if (m_role == Role::CLIENT)
-    {
-        zmq::message_t gameStateMsg;
-        auto result = m_subscribeSocket->recv(gameStateMsg, zmq::recv_flags::dontwait);
-
-        if (result.has_value() && result.value() > 0)
-        {
-            m_gameState = *gameStateMsg.data<GameState>();
-
-            // Set the flag to true once you get the first message.
-            m_hasReceivedFirstState = true;
-        }
-    }
-}
 
 /*
  * This allows the game logic to get the most recent snapshot of the world
@@ -234,6 +166,20 @@ std::optional<GameState> NetworkManager::getLatestGameState()
 
     // Otherwise, return the latest GameState we have stored.
     return m_gameState;
+}
+
+void NetworkManager::messageLooper() {
+    while(true) {
+        GameState current;
+        {
+            std::lock_guard<std::mutex> lock(m_gameStateMut);
+            current = m_gameState;
+        }
+
+        m_publishSocket->send(zmq::buffer(&current, sizeof(GameState)));
+        // Delay maybe?
+        //std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 }
 
 /**
@@ -264,5 +210,36 @@ void NetworkManager::cleanUp()
 
         m_isInitialized = false;
         m_role = Role::NONE;
+
+        for (int i = 0; i < MAX_PLAYERS; ++i) {
+            if (m_clientArr[i].thread.joinable())
+            m_clientArr[i].thread.detach(); // Or join()
+        }
+
+        if (m_updateThread.joinable()) {
+            m_updateThread.detach();
+        }
     }
+}
+
+void NetworkManager::readClient(int id, int portNum) {
+    zmq::socket_t clientRep(*m_context, zmq::socket_type::rep);
+    clientRep.bind("tcp://*:" + std::to_string(portNum));
+
+    while(true) {
+        zmq::message_t req;
+        clientRep.receive(req);
+
+        PlayerState clientState = *req.data<PlayerState>();
+
+        {
+            std::lock_guard<std::mutex> lock(m_gameStateMut);
+            m_gameState.players[id] = clientState;
+        }
+        clientRep.send(zmq::buffer(""));
+    }
+}
+
+void NetworkManager::updateAllClients() {
+
 }

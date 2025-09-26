@@ -7,12 +7,16 @@
 #include <memory>
 #include <optional>
 #include "protocol.h"
+#include <thread>
+#include <mutex>
+//#include <condition_variable>
 
 namespace zmq
 {
     class context_t;
     class socket_t;
 }
+
 
 class NetworkManager
 {
@@ -49,7 +53,7 @@ public:
     /**
      * Function that runs constantly to update client and server state.
      */
-    void update();
+    // void update();
 
     /**
      * Connects to the server and performs a handshake to get a client ID.
@@ -62,6 +66,16 @@ public:
      */
     std::optional<GameState> getLatestGameState();
 
+    void messageLooper();
+
+    /**
+     */
+    void readClient(int id, int portNum);
+
+    /**
+     */
+    void updateAllClients();
+
 private:
     // Enum to track whether we are a server, a client, or uninitialized.
     enum class Role
@@ -70,7 +84,21 @@ private:
         SERVER,
         CLIENT
     };
+
+    struct Client {
+        int id;
+        int portNum;
+        std::thread thread;
+        std::unique_ptr<zmq::socket_t> replySocket;
+    }
+
+    clients[3] m_clientArr;
+    std::mutex m_gameStateMut;
+    //std::condition_variable m_gameStateCV;
+
     Role m_role;
+
+    std::thread m_updateThread;
 
     // A pointer to the current context
     std::unique_ptr<zmq::context_t> m_context;

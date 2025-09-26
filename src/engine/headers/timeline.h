@@ -21,12 +21,10 @@ public:
     void pauseTime();
     void unpauseTime();
     bool isPaused() const;
-    void timeScaleUp();
-    void timeScaleDown();
+    void setTimeScale(float scale);
 
 private:
-    // Internal and private for adhering to guidelines
-    void setTimeScale(float scale);
+    
 
     // Use the high_resolution_clock's native time_point for maximum precision
     std::chrono::high_resolution_clock::time_point m_startTime;
