@@ -2,7 +2,7 @@
 	This is a file that runs the main loop.
 	Some of the content in this file was generated with Gemini 2.5 Pro.
 	This citation is to abide by the syllabus requirement that "appropriate citations"
-	must be given when referring to external sources.
+	must be given when referring to external sources. More information is available upon request.
 */
 #include "../engine/headers/render.h"
 #include "../engine/headers/physics.h"
@@ -17,10 +17,16 @@
 #include <memory>
 #include <SDL3_image/SDL_image.h>
 #include <iostream>
+#include <thread>
+#include <chrono>
+#include <mutex>
 
 SDL_Renderer *renderer = nullptr;
 SDL_Window *window = nullptr;
 
+/**
+ * Produces a texture error.
+ */
 int textureError()
 {
 	SDL_Log("Could not load image: %s", SDL_GetError());
@@ -30,6 +36,9 @@ int textureError()
 	return 1;
 }
 
+/**
+ * Synchronizes the collider's position to match the entity's position.
+ */
 void SyncColliderToEntity(Entity &entity)
 {
 	if (entity.collider)
@@ -38,6 +47,62 @@ void SyncColliderToEntity(Entity &entity)
 		entity.collider->topLeft.y = entity.position.y - entity.dimensions.y / 2.0f;
 		entity.collider->bottomRight.x = entity.position.x + entity.dimensions.x / 2.0f;
 		entity.collider->bottomRight.y = entity.position.y + entity.dimensions.y / 2.0f;
+	}
+}
+
+// The map of remote players and its mutex 
+std::map<int, std::unique_ptr<Entity>> remotePlayers;
+std::mutex remotePlayersMutex;
+
+/**
+ * Thread function to run networking.
+ * @param running Pointer to the running flag.
+ * @param netManager Pointer to the NetworkManager instance.
+ * @param localPlayer Pointer to the local player entity.
+ * @param myClientId Pointer to the client's ID.
+ */
+void network_thread_loop(bool *running, NetworkManager *netManager, Entity *localPlayer, int *myClientId)
+{
+	while (*running)
+	{
+		PlayerState myState;
+		myState.clientId = *myClientId;
+		Vector currentPos = localPlayer->getPosition();
+		myState.x = currentPos.x;
+		myState.y = currentPos.y;
+		netManager->sendPlayerState(myState);
+
+		netManager->update();
+		auto latestGameState = netManager->getLatestGameState();
+
+		if (latestGameState.has_value())
+		{
+			GameState &gs = latestGameState.value();
+
+			// Lock the mutex before accessing the shared remotePlayers map
+			std::lock_guard<std::mutex> lock(remotePlayersMutex);
+
+			for (int i = 0; i < gs.num_clients; ++i)
+			{
+				PlayerState &serverPlayer = gs.players[i];
+				if (serverPlayer.clientId != *myClientId)
+				{
+					if (remotePlayers.find(serverPlayer.clientId) == remotePlayers.end())
+					{
+						// Create new remote player
+						Vector playerDim = {71, 67};
+						remotePlayers[serverPlayer.clientId] = std::make_unique<Entity>(Vector{serverPlayer.x, serverPlayer.y}, playerDim, Vector{0, 0}, false);
+					}
+					else
+					{
+						// Update existing remote player's position
+						remotePlayers.at(serverPlayer.clientId)->setPosition({serverPlayer.x, serverPlayer.y});
+					}
+				}
+			}
+		}
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(33));
 	}
 }
 
@@ -73,6 +138,7 @@ int main(int argc, char *argv[])
 	// Get back a client ID.
 	int myClientId = networkManager.connectAndHandshake();
 
+	// If the client ID is -1, there was an error
 	if (myClientId == -1)
 	{
 		// Handle error: couldn't connect to server
@@ -82,6 +148,7 @@ int main(int argc, char *argv[])
 
 	std::cout << "Successfully connected to server. My client ID is: " << myClientId << std::endl;
 
+	// Set everything for the platform
 	Vector platPos = {WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2};
 	Vector platDim = {62, 30};
 	Vector vel = {0, 0};
@@ -111,9 +178,6 @@ int main(int argc, char *argv[])
 	localPlayer.setCollider(&playerCollider);
 	SyncColliderToEntity(localPlayer);
 
-	// Create a map to hold all the other remote players with key as their ID and entity as the value
-	std::map<int, std::unique_ptr<Entity>> remotePlayers;
-
 	// Do the same thing for each of their renderers
 	std::map<int, RenderComponent> playerRenderers;
 
@@ -141,6 +205,8 @@ int main(int argc, char *argv[])
 	// Main game loop condition variable
 	bool running = true;
 
+	std::thread networkThread(network_thread_loop, &running, &networkManager, &localPlayer, &myClientId);
+
 	// SDL_Event to capture event of window being closed
 	SDL_Event event;
 
@@ -153,6 +219,7 @@ int main(int argc, char *argv[])
 	bool oKeyWasPressedLastFrame = false;
 	bool minusKeyWasPressedLastFrame = false;
 	bool equalsKeyWasPressedLastFrame = false;
+	bool zeroKeywasPressedLastFrame = false;
 
 	// The main game loop
 	while (running)
@@ -161,7 +228,11 @@ int main(int argc, char *argv[])
 		// Update the timeline and get the current delta time.
 		mainTimeline.update();
 		float dt = mainTimeline.getDeltaTime();
-
+		const float MAX_DELTA_TIME = 1.0f / 20.0f;
+		if (dt > MAX_DELTA_TIME)
+		{
+			dt = MAX_DELTA_TIME;
+		}
 		while (SDL_PollEvent(&event))
 		{
 			if (event.type == SDL_EVENT_QUIT)
@@ -175,13 +246,13 @@ int main(int argc, char *argv[])
 		bool pKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_P);
 		bool minusKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_MINUS);
 		bool equalsKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_EQUALS);
+		bool zeroKeyIsPressedNow = isKeyPressed(SDL_SCANCODE_0);
 
 		// Toggle scaling mode only on the frame the '`' key is first pressed.
 		if (graveKeyIsPressedNow && !graveKeyWasPressedLastFrame)
 		{
 			constantSizeScale = !constantSizeScale;
 		}
-		// === TIMELINE INTEGRATION 4: KEYBOARD CONTROLS FOR TIME ===
 		if (pKeyIsPressedNow && !pKeyWasPressedLastFrame)
 		{
 			mainTimeline.pauseTime();
@@ -194,17 +265,20 @@ int main(int argc, char *argv[])
 		}
 		if (minusKeyIsPressedNow && !minusKeyWasPressedLastFrame)
 		{
-			mainTimeline.setTimeScale(0.5); // Slow motion
+			mainTimeline.setTimeScale(0.5);
 			std::cout << "Time scale set to 0.5x" << std::endl;
 		}
 		if (equalsKeyIsPressedNow && !equalsKeyWasPressedLastFrame)
 		{
-			mainTimeline.setTimeScale(2.0); // Fast-forward
+			mainTimeline.setTimeScale(2.0);
 			std::cout << "Time scale set to 2.0x" << std::endl;
 		}
 
-		// You might want a key to reset time scale to 1.0 as well.
-		// TODO: this *******************************************
+		if (zeroKeyIsPressedNow && !zeroKeywasPressedLastFrame)
+		{
+			mainTimeline.setTimeScale(1.0);
+			std::cout << "Time scale set to 1.0x" << std::endl;
+		}
 
 		// Update last frame key states
 		graveKeyWasPressedLastFrame = graveKeyIsPressedNow;
@@ -212,6 +286,7 @@ int main(int argc, char *argv[])
 		oKeyWasPressedLastFrame = oKeyIsPressedNow;
 		minusKeyWasPressedLastFrame = minusKeyIsPressedNow;
 		equalsKeyWasPressedLastFrame = equalsKeyIsPressedNow;
+		zeroKeywasPressedLastFrame = zeroKeyIsPressedNow;
 
 		// Constant Scaling
 		if (constantSizeScale)
@@ -236,77 +311,23 @@ int main(int argc, char *argv[])
 		}
 
 		// Reset the player's velocity
-		localPlayer.velocity.x = 0;
+		localPlayer.setVelocity({0, localPlayer.getVelocity().y});
 
 		if (isKeyPressed(SDL_SCANCODE_A))
 		{
-			localPlayer.velocity.x = -5.0f; // Velocity in pixels per second
+			// Set the velocity using the setter
+			Vector currentVel = localPlayer.getVelocity();
+			localPlayer.setVelocity({-300.0f, currentVel.y});
 		}
 		if (isKeyPressed(SDL_SCANCODE_D))
 		{
-			localPlayer.velocity.x = 5.0f; // Velocity in pixels per second
+			Vector currentVel = localPlayer.getVelocity();
+			localPlayer.setVelocity({300.0f, currentVel.y});
 		}
-
-		// Jump is an impulse (instantaneous change), so it doesn't use dt.
+		// Jump can be set directly since it modifies the whole vector
 		if (isKeyPressed(SDL_SCANCODE_SPACE))
 		{
-			localPlayer.velocity.y = -5.0f; // A stronger jump impulse
-		}
-
-		localPlayer.updatePosition();
-
-		// Package the localPlayer's current state into a PlayerState struct and send it
-		PlayerState myState;
-		myState.clientId = myClientId;
-		myState.x = localPlayer.position.x;
-		myState.y = localPlayer.position.y;
-		networkManager.sendPlayerState(myState);
-
-		// Update the network manager to get the latest gamestate/broadcast
-		networkManager.update();
-		auto latestGameState = networkManager.getLatestGameState();
-
-		if (latestGameState.has_value())
-		{
-			GameState &gs = latestGameState.value();
-
-			// Loop through the players in the GameState from the server.
-			for (int i = 0; i < gs.num_clients; ++i)
-			{
-				PlayerState &serverPlayer = gs.players[i];
-
-				// If the ID is -1 (just created), we need to get a new client ID.
-				if (myClientId == -1)
-				{
-					// Client ID is equal to the server player's client ID
-					myClientId = serverPlayer.clientId;
-				}
-
-				// If the player from the server is NOT us, update them.
-				if (serverPlayer.clientId != myClientId)
-				{
-					if (remotePlayers.find(serverPlayer.clientId) == remotePlayers.end())
-					{
-						// If not, create a new data-only Entity for them.
-						remotePlayers[serverPlayer.clientId] = std::make_unique<Entity>(
-							Vector{serverPlayer.x, serverPlayer.y},
-							Vector{71, 67},
-							Vector{0, 0},
-							false);
-						std::cout << "New player joined with ID: " << serverPlayer.clientId << std::endl;
-					}
-					else
-					{
-						// Access via the pointer
-						remotePlayers.at(serverPlayer.clientId)->position = {serverPlayer.x, serverPlayer.y};
-					}
-
-					if (playerRenderers.find(serverPlayer.clientId) == playerRenderers.end())
-					{
-						playerRenderers.emplace(serverPlayer.clientId, RenderComponent(playerTexture));
-					}
-				}
-			}
+			localPlayer.setVelocity({localPlayer.getVelocity().x, -300.0f});
 		}
 
 		// Rendering
@@ -317,43 +338,37 @@ int main(int argc, char *argv[])
 		int rightBound = policePos.x + 100;
 
 		if (police.position.x > rightBound)
-			police.velocity = {-150.0f, 0};
+			police.setVelocity({-150.0f, 0});
 		if (police.position.x < leftBound)
-			police.velocity = {150.0f, 0};
+			police.setVelocity({150.0f, 0});
 
-		// === TIMELINE INTEGRATION 6: TIME-CORRECTED MOVEMENT ===
-		// Update police position based on velocity over time.
-		police.position.x += police.velocity.x * dt;
+		police.setPosition({police.getPosition().x + police.getVelocity().x * dt, police.getPosition().y});
+		SyncColliderToEntity(police);
 
-		// Apply gravity to the player (acceleration over time).
-		if (localPlayer.physicsApplied)
+		localPlayer.setVelocity({localPlayer.getVelocity().x, localPlayer.getVelocity().y + WorldPhysics::getGravity() * dt});
+
+		Vector nextPosition = localPlayer.getPosition();
+		nextPosition.x += localPlayer.getVelocity().x * dt;
+		nextPosition.y += localPlayer.getVelocity().y * dt;
+
+		Collider testCollider(
+			nextPosition.x - localPlayer.dimensions.x / 2.0f,
+			nextPosition.y - localPlayer.dimensions.y / 2.0f,
+			nextPosition.x + localPlayer.dimensions.x / 2.0f,
+			nextPosition.y + localPlayer.dimensions.y / 2.0f);
+
+		// Check for collision with the platform
+		if (overlappingColliders(testCollider, *platform.collider))
 		{
-			// Gravity is now an acceleration (pixels per second, per second)
-			localPlayer.velocity.y += WorldPhysics::getGravity() * dt;
-		}
-
-		// Update player position based on velocity over time.
-		localPlayer.position.x += localPlayer.velocity.x * dt;
-		localPlayer.position.y += localPlayer.velocity.y * dt;
-		SyncColliderToEntity(localPlayer);
-
-		// Collision check
-		if (overlappingColliders(*localPlayer.collider, *platform.collider))
-		{
-			if (localPlayer.velocity.y > 0)
+			
+			if (localPlayer.getVelocity().y > 0)
 			{
-				localPlayer.position.y = platform.position.y - platform.dimensions.y / 2.0f - localPlayer.dimensions.y / 2.0f;
-				localPlayer.collider->topLeft.y = localPlayer.position.y - localPlayer.dimensions.y / 2.0f;
-				localPlayer.collider->bottomRight.y = localPlayer.position.y + localPlayer.dimensions.y / 2.0f;
-				localPlayer.velocity.y = 0;
+				nextPosition.y = platform.collider->topLeft.y - localPlayer.dimensions.y / 2.0f;
+				localPlayer.setVelocity({localPlayer.getVelocity().x, 0});
 			}
 		}
 
-		if (overlappingColliders(*localPlayer.collider, *police.collider))
-		{
-			localPlayer.position.x = playerPos.x;
-			localPlayer.position.y = playerPos.y;
-		}
+		localPlayer.setPosition(nextPosition);
 
 		platformRenderer.render(renderer, platform.position, platform.dimensions);
 		policeRenderer.render(renderer, police.position, police.dimensions);
@@ -361,23 +376,27 @@ int main(int argc, char *argv[])
 		// Render the local player
 		if (playerRenderers.count(myClientId))
 		{
-			playerRenderers.at(myClientId).render(renderer, localPlayer.position, localPlayer.dimensions);
+			playerRenderers.at(myClientId).render(renderer, localPlayer.getPosition(), localPlayer.getDimensions());
 		}
 
-		// Render remote players
-		for (auto const &[id, remote_player_ptr] : remotePlayers)
 		{
-			if (playerRenderers.find(id) == playerRenderers.end())
+			std::lock_guard<std::mutex> lock(remotePlayersMutex);
+			// Render remote players
+			for (auto const &[id, remote_player_ptr] : remotePlayers)
 			{
-				playerRenderers.emplace(id, RenderComponent(playerTexture));
+				if (playerRenderers.find(id) == playerRenderers.end())
+				{
+					playerRenderers.emplace(id, RenderComponent(playerTexture));
+				}
+				// Use the pointer to get the entity's data
+				playerRenderers.at(id).render(renderer, remote_player_ptr->getPosition(), remote_player_ptr->getDimensions());
 			}
-			// Use the pointer to get the entity's data
-			playerRenderers.at(id).render(renderer, remote_player_ptr->position, remote_player_ptr->dimensions);
 		}
 
 		refreshScreen(renderer);
 	}
 
+	networkThread.join();
 	SDL_DestroyTexture(playerTexture);
 	SDL_DestroyTexture(platformTexture);
 	SDL_DestroyTexture(policeTexture);
