@@ -5,6 +5,7 @@
 #include <atomic>
 #include "struct.h"
 #include "collisions.h"
+#include <SDL3_image/SDL_image.h>
 
 
 
@@ -35,13 +36,7 @@ public:
 
 
 
-    // Prevent accidental copying (pointers in collider)
-    Entity(const Entity &) = delete;
-    Entity &operator=(const Entity &) = delete;
-
-    // Allow move semantics
-    Entity(Entity &&) noexcept = default;
-    Entity &operator=(Entity &&) noexcept = default;
+    
 
     /*
 	 * --------------------AI USE CITATION---------------------
@@ -50,10 +45,13 @@ public:
 	 * them after reviewing the content and their intended purpose for memory/resource management.
 	 * - hplenham
 	*/
-	Entity(const Entity&) = delete;
-	Entity& operator=(const Entity&) = delete;
-	Entity(Entity&&) noexcept = default;
-	Entity& operator=(Entity&&) noexcept = default;
+	// Prevent accidental copying (pointers in collider)
+    Entity(const Entity &) = delete;
+    Entity &operator=(const Entity &) = delete;
+
+    // Allow move semantics
+    Entity(Entity &&) noexcept = default;
+    Entity &operator=(Entity &&) noexcept = default;
 
     // --- DATA MEMBERS ---
     // Entity's top left point
@@ -86,7 +84,6 @@ public:
 
     void makeCollider();
     void updatePosition();
-    void updateCollider();
 };
 
 #endif // ENTITIES_H

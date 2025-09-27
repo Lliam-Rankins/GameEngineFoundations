@@ -2,7 +2,7 @@
 	This is a component file that manages entities.
 */
 
-#include "../headers/entities.hh"
+#include "../headers/entities.h"
 #include <SDL3/SDL.h> // Included for SDL_QueryTexture if needed
 
 /*
@@ -28,11 +28,24 @@ Entity::Entity(const Vector pos, const Vector dim, SDL_Texture* tex, bool physic
 	: position(pos), dimensions(dim), velocity(vel), physicsApplied(physics), texture(tex), collider(nullptr) {
 }
 
+// Full constructor with texture
+Entity::Entity(const Vector pos, const Vector dim, SDL_Texture* tex, bool physics)
+	: position(pos), dimensions(dim), velocity(Vector(0,0)), physicsApplied(physics), texture(tex), collider(nullptr) {
+}
+
 // Constructor for non-textured entities (server-friendly)
 Entity::Entity(Vector pos, Vector dim, Vector vel, bool phys)
 	: position(pos), dimensions(dim), velocity(vel), physicsApplied(phys), texture(nullptr), collider(nullptr)
 {
 }
+
+Entity::Entity(const Vector position, SDL_Texture* texture, bool physics)
+	: position(position), dimensions(Vector()), velocity(Vector()), physicsApplied(physics), texture(texture), collider(nullptr) {
+		float w = 0;
+		float h = 0;
+		SDL_GetTextureSize(texture, &w, &h);
+		dimensions = Vector{(float)w, (float)h};
+	}
 
 // Destructor - The Entity does NOT own the texture.
 Entity::~Entity()
@@ -115,7 +128,7 @@ void Entity::setVelocity(Vector newVelocity) {
 	this->velocity = newVelocity;
 }
 
-void Entity::setPhysicsApplied(bool newPhysicsApplied) { 
+void Entity::setPhysicsApplied(bool newPhysicsApplied) {
 	std::unique_lock<std::mutex> cv_lock(entityMutex);
 	this->physicsApplied = newPhysicsApplied;
 }

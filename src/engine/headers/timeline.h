@@ -22,6 +22,7 @@ public:
     void unpauseTime();
     bool isPaused() const;
     void setTimeScale(float scale);
+    float getTimeScale();
 
 private:
     
