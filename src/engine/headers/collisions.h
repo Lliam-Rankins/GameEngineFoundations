@@ -38,6 +38,6 @@ struct Collider {
 	void setBottomRight(Vector newBottomRight);
 };
 // This function returns true if two colliders are overlapping, false otherwise
-bool overlappingColliders(Collider a, Collider b);
+bool overlappingColliders(const Collider& a, const Collider& b);
 
 #endif // COLLISIONS_H
