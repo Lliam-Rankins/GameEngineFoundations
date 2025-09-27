@@ -170,7 +170,7 @@ void NetworkManager::handleHandshakes() {
         // Create a request
         zmq::message_t req;
         // If no message is received, continue looping
-        if(!m_handshakeSocket->recv(req, zmq::recv_flags::none)) {
+        if(!m_handshakeSocket->recv(req, zmq::recv_flags::dontwait)) {
             continue;
         }
         // Get the connect request from the handshaking client
@@ -236,7 +236,7 @@ void NetworkManager::messageLooper() {
         // Publish game state to all clients
         m_publishSocket->send(zmq::buffer(&current, sizeof(GameState)));
         // Delay maybe?
-        std::this_thread::sleep_for(std::chrono::milliseconds(8));
+        std::this_thread::sleep_for(std::chrono::milliseconds(32));
     }
 }
 
@@ -274,7 +274,7 @@ void NetworkManager::cleanUp()
         }
 
         if (m_updateThread.joinable()) {
-            m_updateThread.detach();
+            m_updateThread.join();
         }
     }
 }
@@ -285,7 +285,7 @@ void NetworkManager::readClient(int id, int portNum) {
 
     while(m_running) {
         zmq::message_t message;
-        if(!clientRep.recv(message, zmq::recv_flags::none)) {
+        if(!clientRep.recv(message, zmq::recv_flags::dontwait)) {
             continue;
         }
 
@@ -294,6 +294,10 @@ void NetworkManager::readClient(int id, int portNum) {
         {
             std::lock_guard<std::mutex> lock(m_gameStateMut);
             m_gameState.players[id] = clientState;
+
+            if (m_gameState.num_clients <= id) {
+                m_gameState.num_clients = id + 1;
+            }
         }
         clientRep.send(zmq::buffer(""));
     }
