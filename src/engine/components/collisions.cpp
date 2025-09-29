@@ -29,7 +29,7 @@ void Collider::setBottomRight(Vector newBottomRight) {
   @param a, b are two Collider instances
   @return true if a and b collide, false otherwise
 */
-bool overlappingColliders(const Collider& a, const Collider& b) {
+bool overlappingColliders(const Collider &a, const Collider &b) {
 
 	// Check if x values for a and b overlap at all
 	bool overlappingX = false;

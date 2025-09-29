@@ -18,11 +18,28 @@ add_executable(client
     ./src/engine/components/timeline.cpp
 )
 
+add_executable(p2p_client
+    ./src/game/p2p_main.cpp
+    ./src/engine/components/render.cpp
+    ./src/engine/components/input.cpp
+    ./src/engine/components/entities.cpp
+    ./src/engine/components/physics.cpp
+    ./src/engine/components/collisions.cpp
+    ./src/engine/components/P2PClientManager.cpp
+    ./src/engine/components/timeline.cpp
+)
+
 target_compile_definitions(client PRIVATE IS_CLIENT)
 
 add_executable(server
     ./src/engine/components/server.cpp
     ./src/engine/components/network.cpp
+)
+
+add_executable(p2p_server
+    ./src/game/P2Pserver.cpp
+    ./src/engine/components/P2PServerManager.cpp
+    ./src/engine/components/timeline.cpp
 )
 
 set(MEDIA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/media")
@@ -36,5 +53,8 @@ add_custom_command(
 )
 
 target_link_libraries(client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
+target_link_libraries(p2p_client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
 target_link_libraries(server PRIVATE cppzmq)
+target_link_libraries(p2p_server PRIVATE cppzmq)
+
 
