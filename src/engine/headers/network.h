@@ -27,11 +27,13 @@ public:
      * Starts the server at the listed port.
      * @param replyPort the port for replying
      * @param publishPort the port for publishing
+     * @param handshakePort is the port to handle handshakes at from new clients
      */
     bool startServer(int replyPort, int publishPort, int handshakePort);
 
     /**
      * Starts the client and connects to the server address at the port given.
+     * -- Run this after connectAndHandshake to generate a unique requestPort using the returned id
      * @param serverAddress the address of the server
      * @param requestPort the port for requests
      * @param subscribePort the port for subscribes
@@ -40,7 +42,7 @@ public:
     bool startClient(const std::string &serverAddress, int requestPort, int subscribePort);
 
     /**
-     * Closes connections and contexts.
+     * Closes connections, contexts, and threads.
      */
     void cleanUp();
 
@@ -89,7 +91,6 @@ private:
         int id;
         int portNum;
         std::thread thread;
-        std::unique_ptr<zmq::socket_t> replySocket;
     };
 
     Client m_clientArr[MAX_PLAYERS];
@@ -97,6 +98,7 @@ private:
 
     Role m_role;
 
+    // The server's threads
     std::thread m_updateThread;
     std::thread m_handshakeThread;
 
