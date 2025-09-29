@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
 	networkManager.startClient("localhost", REQUEST_PORT, SUBSCRIBE_PORT);
 
 	// Get back a client ID.
-	int myClientId = networkManager.connectAndHandshake();
+	int myClientId = networkManager.connectAndHandshake("localhost", REQUEST_PORT);
 
 	// If the client ID is -1, there was an error
 	if (myClientId == -1)

@@ -28,11 +28,24 @@ Entity::Entity(const Vector pos, const Vector dim, SDL_Texture* tex, bool physic
 	: position(pos), dimensions(dim), velocity(vel), physicsApplied(physics), texture(tex), collider(nullptr) {
 }
 
+// Full constructor with texture
+Entity::Entity(const Vector pos, const Vector dim, SDL_Texture* tex, bool physics)
+	: position(pos), dimensions(dim), velocity(Vector(0,0)), physicsApplied(physics), texture(tex), collider(nullptr) {
+}
+
 // Constructor for non-textured entities (server-friendly)
 Entity::Entity(Vector pos, Vector dim, Vector vel, bool phys)
 	: position(pos), dimensions(dim), velocity(vel), physicsApplied(phys), texture(nullptr), collider(nullptr)
 {
 }
+
+Entity::Entity(const Vector position, SDL_Texture* texture, bool physics)
+	: position(position), dimensions(Vector()), velocity(Vector()), physicsApplied(physics), texture(texture), collider(nullptr) {
+		float w = 0;
+		float h = 0;
+		SDL_GetTextureSize(texture, &w, &h);
+		dimensions = Vector{(float)w, (float)h};
+	}
 
 // Destructor - The Entity does NOT own the texture.
 Entity::~Entity()
@@ -50,8 +63,11 @@ void Entity::makeCollider()
 	this->collider = new Collider(this->position.x, this->position.y, this->position.x + this->dimensions.x, this->position.y + this->dimensions.y);
 }
 
-void Entity::updatePosition()
+void Entity::updatePosition(bool isPaused)
 {
+	if(isPaused) {
+		return;
+	}
 	std::unique_lock<std::mutex> cv_lock(entityMutex);
 	// Apply velocity to position
 	this->position.x += this->velocity.x;

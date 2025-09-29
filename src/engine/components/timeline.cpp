@@ -13,10 +13,10 @@ Timeline::Timeline(long long tickSizeMs) {
     m_tickSizeNs = tickSizeMs * 1000000;
     
     // Initialize all duration counters to zero.
-    m_currentTick = 0;
+    m_currentTick = 0; // Ticks can be used for interval-based updates, e.g. if you want a platform to move every 5 ticks you could do if(m_currentTick % 5 == 0) {...}
     m_tickCt = 0;
     m_totalElapsedNs = 0;
-    m_deltaTimeNs = 0;
+    m_deltaTimeNs = 0; // Delta Time can be used for consistent updates, e.g. you likely want to be able to move consistently, you can just calculate a new position with * m_deltaTimeNs
     m_totalPausedNs = 0;
 
     // Initialize state variables
@@ -94,22 +94,6 @@ void Timeline::setTimeScale(float scale) {
     m_timeScale = scale;
 }
 
-void Timeline::timeScaleUp() {
-    if(m_timeScale == 0.5) {
-        setTimeScale(1.0);
-    } else if(m_timeScale == 1.0) {
-        setTimeScale(2.0);
-    } else {
-        return;
-    }
-}
-
-void Timeline::timeScaleDown() {
-    if(m_timeScale == 2.0) {
-        setTimeScale(1.0);
-    } else if(m_timeScale == 1.0) {
-        setTimeScale(0.5);
-    } else {
-        return;
-    }
+float Timeline::getTimeScale() {
+    return m_timeScale;
 }
