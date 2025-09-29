@@ -63,8 +63,11 @@ void Entity::makeCollider()
 	this->collider = new Collider(this->position.x, this->position.y, this->position.x + this->dimensions.x, this->position.y + this->dimensions.y);
 }
 
-void Entity::updatePosition()
+void Entity::updatePosition(bool isPaused)
 {
+	if(isPaused) {
+		return;
+	}
 	std::unique_lock<std::mutex> cv_lock(entityMutex);
 	// Apply velocity to position
 	this->position.x += this->velocity.x;

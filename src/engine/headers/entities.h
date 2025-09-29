@@ -83,7 +83,7 @@ public:
     void setCollider(Collider *newCollider);
 
     void makeCollider();
-    void updatePosition();
+    void updatePosition(bool isPaused);
 };
 
 #endif // ENTITIES_H
