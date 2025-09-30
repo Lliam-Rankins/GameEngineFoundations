@@ -40,7 +40,8 @@ bool NetworkManager::startServer(int startReplyPort, int publishPort, int handsh
     m_handshakeSocket->bind("tcp://*:" + std::to_string(handshakePort));
 
     // Loop through each index in m_clientArr and give them an id, port number,  and specific thread
-    for(int i = 0; i < MAX_PLAYERS; i++) {
+    for (int i = 0; i < MAX_PLAYERS; i++)
+    {
         int clientPortNum = startReplyPort + i;
 
         m_clientArr[i].id = i;
@@ -123,15 +124,16 @@ void NetworkManager::sendPlayerState(const PlayerState &state)
 }
 
 // This is used to update m_gameState's NPCs and Players without changing num_clients
-void NetworkManager::setGameState(const GameState& newState) {
+void NetworkManager::setGameState(const GameState &newState)
+{
     {
         std::lock_guard<std::mutex> lock(m_gameStateMut);
         m_gameState = newState;
-
     }
 }
 
-GameState NetworkManager::getGameState() {
+GameState NetworkManager::getGameState()
+{
     std::lock_guard<std::mutex> lock(m_gameStateMut);
     return m_gameState;
 }
@@ -140,7 +142,8 @@ GameState NetworkManager::getGameState() {
  * Connects the client and the server together.
  * @return the integer value representing the client ID.
  */
-int NetworkManager::connectAndHandshake(const std::string& serverAddress, int handshakePort) {
+int NetworkManager::connectAndHandshake(const std::string &serverAddress, int handshakePort)
+{
     // Create a temporary context for the handshake
     zmq::context_t tempContext(1);
     zmq::socket_t handshakeSocket(tempContext, zmq::socket_type::req);
@@ -157,7 +160,8 @@ int NetworkManager::connectAndHandshake(const std::string& serverAddress, int ha
 
     // Attempt to get a reply from the handshake
     zmq::message_t reply;
-    if (!handshakeSocket.recv(reply)) {
+    if (!handshakeSocket.recv(reply))
+    {
         return -1;
     }
 
@@ -167,13 +171,16 @@ int NetworkManager::connectAndHandshake(const std::string& serverAddress, int ha
 }
 
 // Thread function run by server thread to handle incoming handshakes
-void NetworkManager::handleHandshakes() {
+void NetworkManager::handleHandshakes()
+{
     // While server is running
-    while(m_running) {
+    while (m_running)
+    {
         // Create a request
         zmq::message_t req;
         // If no message is received, continue looping
-        if(!m_handshakeSocket->recv(req, zmq::recv_flags::dontwait)) {
+        if (!m_handshakeSocket->recv(req, zmq::recv_flags::dontwait))
+        {
             continue;
         }
         // Get the connect request from the handshaking client
@@ -185,9 +192,12 @@ void NetworkManager::handleHandshakes() {
             std::lock_guard<std::mutex> lock(m_gameStateMut);
 
             // If there is room for another client, get the current num_clients for an id and then increment num_clients
-            if(m_gameState.num_clients < MAX_PLAYERS) {
+            if (m_gameState.num_clients < MAX_PLAYERS)
+            {
                 response.clientId = m_gameState.num_clients++;
-            } else {
+            }
+            else
+            {
                 response.clientId = -1;
             }
         }
@@ -196,12 +206,14 @@ void NetworkManager::handleHandshakes() {
 }
 
 // Called by client to check if there are any new gamestate updates
-void NetworkManager::update() {
+void NetworkManager::update()
+{
     // Create a new GameState message and try too receive it from the server
     zmq::message_t gameStateMessage;
     auto result = m_subscribeSocket->recv(gameStateMessage, zmq::recv_flags::dontwait);
     // If a new GameState was successfully received, update client's GameState
-    if(result.has_value() && result.value() > 0) {
+    if (result.has_value() && result.value() > 0)
+    {
         std::lock_guard<std::mutex> lock(m_gameStateMut);
         m_gameState = *gameStateMessage.data<GameState>();
         m_hasReceivedFirstState = true;
@@ -231,9 +243,11 @@ std::optional<GameState> NetworkManager::getLatestGameState()
 /**
  * Function called by a server thread to continuously send out new messages to the clients.
  */
-void NetworkManager::messageLooper() {
+void NetworkManager::messageLooper()
+{
     // While the server is running
-    while(m_running) {
+    while (m_running)
+    {
         // Get the current  GameState
         GameState current;
         // Lock it all up
@@ -277,12 +291,24 @@ void NetworkManager::cleanUp()
         m_role = Role::NONE;
 
         // Close all threads
-        for (int i = 0; i < MAX_PLAYERS; ++i) {
-            if (m_clientArr[i].thread.joinable())
-            m_clientArr[i].thread.detach(); 
+        if (m_handshakeThread.joinable())
+        {
+            m_handshakeThread.join();
+        }
+        if (m_updateThread.joinable())
+        {
+            m_updateThread.join();
         }
 
-        if (m_updateThread.joinable()) {
+        // Close all client threads
+        for (int i = 0; i < MAX_PLAYERS; ++i)
+        {
+            if (m_clientArr[i].thread.joinable())
+                m_clientArr[i].thread.join(); // Use join(), not detach()
+        }
+
+        if (m_updateThread.joinable())
+        {
             m_updateThread.join();
         }
     }
@@ -291,16 +317,19 @@ void NetworkManager::cleanUp()
 /**
  * Called by server thread, one per client, to continuously read input from the designated client.
  */
-void NetworkManager::readClient(int id, int portNum) {
+void NetworkManager::readClient(int id, int portNum)
+{
     // Create a client reply socket
     zmq::socket_t clientRep(*m_context, zmq::socket_type::rep);
     clientRep.bind("tcp://*:" + std::to_string(portNum));
 
     // Continuously loop while the server is running
-    while(m_running) {
+    while (m_running)
+    {
         // Create and try to receive a client message, if none then restart loop
         zmq::message_t message;
-        if(!clientRep.recv(message, zmq::recv_flags::dontwait)) {
+        if (!clientRep.recv(message, zmq::recv_flags::dontwait))
+        {
             continue;
         }
 
@@ -313,7 +342,8 @@ void NetworkManager::readClient(int id, int portNum) {
             m_gameState.players[id] = clientState;
 
             // If this is a new client, increment client count
-            if (m_gameState.num_clients <= id) {
+            if (m_gameState.num_clients <= id)
+            {
                 m_gameState.num_clients = id + 1;
             }
         }

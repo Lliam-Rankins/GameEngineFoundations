@@ -1,33 +1,32 @@
 #include <iostream>
-#include <thread>   // Required for std::this_thread::sleep_for
-#include <chrono>   // Required for std::chrono::milliseconds
+#include <thread> // Required for std::this_thread::sleep_for
+#include <chrono> // Required for std::chrono::milliseconds
 
 #include "../headers/network.h" // Include your NetworkManager
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[])
+{
     std::cout << "Starting server..." << std::endl;
 
     NetworkManager serverManager;
 
     // Use the same ports you configured in the client
-    const int REPLY_PORT = 5555;
+    const int REPLY_PORT = 6000;
     const int PUBLISH_PORT = 5556;
+    const int HANDSHAKE_PORT = 5557;
 
-    if (!serverManager.startServer(REPLY_PORT, PUBLISH_PORT)) {
+    if (!serverManager.startServer(REPLY_PORT, PUBLISH_PORT, HANDSHAKE_PORT))
+    {
         std::cerr << "Failed to start the server." << std::endl;
         return 1;
     }
 
     std::cout << "Server started successfully. Waiting for clients..." << std::endl;
 
-    // This is the main server loop. It runs forever.
-    while (true) {
-        // The update function handles receiving client states and broadcasting the world state.
-        serverManager.update();
-
-        // Prevent the server from using 100% CPU.
-        // A 16ms sleep gives us a "tick rate" of about 60 updates per second.
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+    while (true)
+    {
+        // Idle the main thread.
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // In this simple server, the loop never ends.

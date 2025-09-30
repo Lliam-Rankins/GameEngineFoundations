@@ -50,7 +50,7 @@ void SyncColliderToEntity(Entity &entity)
 	}
 }
 
-// The map of remote players and its mutex 
+// The map of remote players and its mutex
 std::map<int, std::unique_ptr<Entity>> remotePlayers;
 std::mutex remotePlayersMutex;
 
@@ -131,12 +131,11 @@ int main(int argc, char *argv[])
 	NetworkManager networkManager;
 
 	// Request port 5555 and subscribe port 5556
-	const int REQUEST_PORT = 5555;
+	const int HANDSHAKE_PORT = 5557;
 	const int SUBSCRIBE_PORT = 5556;
-	networkManager.startClient("localhost", REQUEST_PORT, SUBSCRIBE_PORT);
+	const int BASE_REPLY_PORT = 6000;
 
-	// Get back a client ID.
-	int myClientId = networkManager.connectAndHandshake("localhost", REQUEST_PORT);
+	int myClientId = networkManager.connectAndHandshake("localhost", HANDSHAKE_PORT);
 
 	// If the client ID is -1, there was an error
 	if (myClientId == -1)
@@ -147,6 +146,12 @@ int main(int argc, char *argv[])
 	}
 
 	std::cout << "Successfully connected to server. My client ID is: " << myClientId << std::endl;
+
+	int myRequestPort = BASE_REPLY_PORT + myClientId;
+	std::cout << "This client will send updates to port: " << myRequestPort << std::endl;
+
+	// STEP 3: Start the main client sockets, connecting to our unique request port
+	networkManager.startClient("localhost", myRequestPort, SUBSCRIBE_PORT);
 
 	// Set everything for the platform
 	Vector platPos = {WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2};
@@ -232,6 +237,18 @@ int main(int argc, char *argv[])
 		if (dt > MAX_DELTA_TIME)
 		{
 			dt = MAX_DELTA_TIME;
+		}
+		// --- FIX: ADD THIS SAFETY CHECK ---
+		if (dt <= 0)
+		{
+			// A negative dt is a clock error, and a zero dt means the game is paused.
+			// In either case, we should skip all logic and rendering for this frame.
+			// We can print a warning to the console to know when it happens.
+			if (dt < 0)
+			{
+				std::cerr << "WARNING: Negative delta time detected (" << dt << "s). Skipping frame to maintain stability." << std::endl;
+			}
+			continue; // Immediately start the next loop iteration
 		}
 		while (SDL_PollEvent(&event))
 		{
@@ -360,7 +377,7 @@ int main(int argc, char *argv[])
 		// Check for collision with the platform
 		if (overlappingColliders(testCollider, *platform.collider))
 		{
-			
+
 			if (localPlayer.getVelocity().y > 0)
 			{
 				nextPosition.y = platform.collider->topLeft.y - localPlayer.dimensions.y / 2.0f;
