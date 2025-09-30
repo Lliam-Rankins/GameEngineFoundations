@@ -1,4 +1,9 @@
-
+/*
+	This is a file that runs the main loop.
+	Some of the content in this file was generated with Gemini 2.5 Pro.
+	This citation is to abide by the syllabus requirement that "appropriate citations"
+	must be given when referring to external sources. More information is available upon request.
+*/
 #include "../engine/headers/render.h"
 #include "../engine/headers/physics.h"
 #include "../engine/headers/collisions.h"
@@ -111,37 +116,38 @@ int main(int argc, char* argv[])
 	// Main game loop condition variable
 	bool running = true;
 
+	std::thread networkThread(network_thread_loop, &running, &networkManager, &localPlayer, &myClientId);
+
 	// SDL_Event to capture event of window being closed
 	SDL_Event event;
 
 	// Scaling Type bool
 	bool constantSizeScale = true;
 
+	// Variables to track the previous state of toggle keys to prevent flickering. These are for scaling, making player spawn, and time management
+	bool graveKeyWasPressedLastFrame = false;
+	bool pKeyWasPressedLastFrame = false;
+	bool oKeyWasPressedLastFrame = false;
+	bool minusKeyWasPressedLastFrame = false;
+	bool equalsKeyWasPressedLastFrame = false;
+	bool zeroKeywasPressedLastFrame = false;
+
 	// The main game loop
-	while (running) {
-		// Poll for events
-		while (SDL_PollEvent(&event)) {
+	while (running)
+	{
 
-			// If event is Window Resize
-			if (event.type == SDL_EVENT_WINDOW_RESIZED) {
-				// Constant Scaling
-				if (constantSizeScale) {
-					// Resize as if the screen was still the same
-					SDL_SetRenderLogicalPresentation(renderer, 1920, 1080, SDL_LOGICAL_PRESENTATION_STRETCH);
-				}
-				// Proportional Scaling
-				else {
-					//Get Window Size
-					int w, h;
-					SDL_GetWindowSize(window, &w, &h);
-					// Resize as if the screen was still the same
-					SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
-				}	
-			}
-
-			// Read input from input manager
-			// If the event is close the window
+		// Update the timeline and get the current delta time.
+		mainTimeline.update();
+		float dt = mainTimeline.getDeltaTime();
+		const float MAX_DELTA_TIME = 1.0f / 20.0f;
+		if (dt > MAX_DELTA_TIME)
+		{
+			dt = MAX_DELTA_TIME;
+		}
+		while (SDL_PollEvent(&event))
+		{
 			if (event.type == SDL_EVENT_QUIT)
+			{
 				running = false;
 
 			// Otherwise look for a key press
@@ -206,7 +212,7 @@ int main(int argc, char* argv[])
 		player.velocity = {0, 0};
 
 		//////////////////////////////////////////////////
-		//
+    //
 		// Rendering
 		//
 		//////////////////////////////////////////////////
@@ -218,13 +224,71 @@ int main(int argc, char* argv[])
 		renderEntity(platform_1);
 		renderEntity(movingPlat_1);
 
-		// Clear screen
-		//SDL_RenderClear(renderer);
-		
-		refreshScreen(renderer);
+		if (police.position.x > rightBound)
+			police.setVelocity({-150.0f, 0});
+		if (police.position.x < leftBound)
+			police.setVelocity({150.0f, 0});
 
+		police.setPosition({police.getPosition().x + police.getVelocity().x * dt, police.getPosition().y});
+		SyncColliderToEntity(police);
+
+		localPlayer.setVelocity({localPlayer.getVelocity().x, localPlayer.getVelocity().y + WorldPhysics::getGravity() * dt});
+
+		Vector nextPosition = localPlayer.getPosition();
+		nextPosition.x += localPlayer.getVelocity().x * dt;
+		nextPosition.y += localPlayer.getVelocity().y * dt;
+
+		Collider testCollider(
+			nextPosition.x - localPlayer.dimensions.x / 2.0f,
+			nextPosition.y - localPlayer.dimensions.y / 2.0f,
+			nextPosition.x + localPlayer.dimensions.x / 2.0f,
+			nextPosition.y + localPlayer.dimensions.y / 2.0f);
+
+		// Check for collision with the platform
+		if (overlappingColliders(testCollider, *platform.collider))
+		{
+			
+			if (localPlayer.getVelocity().y > 0)
+			{
+				nextPosition.y = platform.collider->topLeft.y - localPlayer.dimensions.y / 2.0f;
+				localPlayer.setVelocity({localPlayer.getVelocity().x, 0});
+			}
+		}
+
+		localPlayer.setPosition(nextPosition);
+
+		platformRenderer.render(renderer, platform.position, platform.dimensions);
+		policeRenderer.render(renderer, police.position, police.dimensions);
+
+		// Render the local player
+		if (playerRenderers.count(myClientId))
+		{
+			playerRenderers.at(myClientId).render(renderer, localPlayer.getPosition(), localPlayer.getDimensions());
+		}
+
+		{
+			std::lock_guard<std::mutex> lock(remotePlayersMutex);
+			// Render remote players
+			for (auto const &[id, remote_player_ptr] : remotePlayers)
+			{
+				if (playerRenderers.find(id) == playerRenderers.end())
+				{
+					playerRenderers.emplace(id, RenderComponent(playerTexture));
+				}
+				// Use the pointer to get the entity's data
+				playerRenderers.at(id).render(renderer, remote_player_ptr->getPosition(), remote_player_ptr->getDimensions());
+			}
+		}
+
+		refreshScreen(renderer);
 	}
 
+	networkThread.join();
+	SDL_DestroyTexture(playerTexture);
+	SDL_DestroyTexture(platformTexture);
+	SDL_DestroyTexture(policeTexture);
+
+	networkManager.cleanUp();
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();

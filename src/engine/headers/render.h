@@ -5,20 +5,30 @@
 #define RENDER_H
 
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
-#include <SDL3/SDL_scancode.h>
-#include <SDL3_image/SDL_image.h>
-#include <iostream>
-#include "../headers/entities.h"
-#include "../headers/input.h"
-
+#include "struct.h" // For the Vector struct
 
 const int WINDOW_WIDTH = 1920;  /*  Width of the game window to be created*/
 const int WINDOW_HEIGHT = 1080; /*  Height of the game window to be created*/
-const int FRAME_COUNT = 8;     /*  Number of frames in the spritesheet */
-const int FRAME_WIDTH = 512;   /*  Width of the frame in the spritesheet */
-const int FRAME_HEIGHT = 512;  /*  Height of the frame in the spritesheet */
-const int ANIMATION_DELAY = 100;/* Number of iterations between the animation frames (determines delay) */
+
+// A component responsible for rendering an entity
+class RenderComponent
+{
+public:
+	RenderComponent(SDL_Texture *tex);
+	void render(SDL_Renderer *renderer, const Vector &position, const Vector &dimensions);
+
+		// --- FIX: Add Move Semantics ---
+	// Prevent copying to avoid issues with texture ownership.
+	RenderComponent(const RenderComponent &) = delete;
+	RenderComponent &operator=(const RenderComponent &) = delete;
+
+	// Explicitly tell the compiler that moving is safe and how to do it.
+	RenderComponent(RenderComponent &&) noexcept = default;
+	RenderComponent &operator=(RenderComponent &&) noexcept = default;
+
+private:
+	SDL_Texture *m_texture;
+};
 
 void initializeSDL();
 

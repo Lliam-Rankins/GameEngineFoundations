@@ -3,12 +3,33 @@
 */
 #include "../headers/collisions.h"
 
+
+Vector Collider::getTopLeft() {
+	std::unique_lock<std::mutex> cv_lock(colliderMutex);
+	return this->topLeft;
+}
+
+Vector Collider::getBottomRight() {
+	std::unique_lock<std::mutex> cv_lock(colliderMutex);
+	return this->bottomRight;
+}
+
+void Collider::setTopLeft(Vector newTopLeft) {
+	std::unique_lock<std::mutex> cv_lock(colliderMutex);
+	this->topLeft = newTopLeft;
+}
+
+void Collider::setBottomRight(Vector newBottomRight) {
+	std::unique_lock<std::mutex> cv_lock(colliderMutex);
+	this->bottomRight = newBottomRight;
+}
+
 /**
   This function takes in two colliders and provides a bool value depending on if they are overlapping or not.
   @param a, b are two Collider instances
   @return true if a and b collide, false otherwise
 */
-bool overlappingColliders(Collider a, Collider b) {
+bool overlappingColliders(const Collider &a, const Collider &b) {
 
 	// Check if x values for a and b overlap at all
 	bool overlappingX = false;

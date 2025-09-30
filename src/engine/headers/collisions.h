@@ -4,13 +4,18 @@
 #ifndef COLLISIONS_H
 #define COLLISIONS_H
 
+#include <mutex>
 #include "mathEngine.h"
+
 struct Collider {
 	// Top Left of Box
 	Vector topLeft;
 
 	// Bottom Right of Box
 	Vector bottomRight;
+
+	// Mutex Lock for CoSllider
+    std::mutex colliderMutex;
 
 	// Default Constructor
 	Collider() {
@@ -25,8 +30,14 @@ struct Collider {
 		bottomRight.x = initx2;
 		bottomRight.y = inity2;
 	}
+
+	Vector getTopLeft();
+	Vector getBottomRight();
+
+	void setTopLeft(Vector newTopLeft);
+	void setBottomRight(Vector newBottomRight);
 };
 // This function returns true if two colliders are overlapping, false otherwise
-bool overlappingColliders(Collider a, Collider b);
+bool overlappingColliders(const Collider& a, const Collider& b);
 
 #endif // COLLISIONS_H
