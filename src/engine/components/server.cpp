@@ -10,10 +10,11 @@ int main(int argc, char* argv[]) {
     NetworkManager serverManager;
 
     // Use the same ports you configured in the client
-    const int REPLY_PORT = 5555;
+    const int REPLY_PORT = 5558;
     const int PUBLISH_PORT = 5556;
+    const int HANDSHAKE_PORT = 5557;
 
-    if (!serverManager.startServer(REPLY_PORT, PUBLISH_PORT)) {
+    if (!serverManager.startServer(REPLY_PORT, PUBLISH_PORT, HANDSHAKE_PORT)) {
         std::cerr << "Failed to start the server." << std::endl;
         return 1;
     }
@@ -22,12 +23,9 @@ int main(int argc, char* argv[]) {
 
     // This is the main server loop. It runs forever.
     while (true) {
-        // The update function handles receiving client states and broadcasting the world state.
-        serverManager.update();
-
         // Prevent the server from using 100% CPU.
         // A 16ms sleep gives us a "tick rate" of about 60 updates per second.
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
     // In this simple server, the loop never ends.

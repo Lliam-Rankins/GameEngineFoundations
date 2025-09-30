@@ -1,12 +1,16 @@
-/*
-	This is a file that runs the main loop.
-	Some of the content in this file was generated with Gemini 2.5 Pro.
-	This citation is to abide by the syllabus requirement that "appropriate citations"
-	must be given when referring to external sources. More information is available upon request.
-*/
+
 #include "../engine/headers/render.h"
 #include "../engine/headers/physics.h"
 #include "../engine/headers/collisions.h"
+#include "../engine/headers/input.h"
+#include "../engine/headers/network.h"
+#include "../engine/headers/protocol.h"
+#include "../engine/headers/entities.h"
+#include "../engine/headers/input.h"
+#include "../engine/headers/timeline.h"
+#include <iostream>
+#include <thread>
+#include <chrono>
 
 // Initialize the window and renderer using SDL method
 SDL_Window* window = nullptr;
@@ -25,11 +29,18 @@ Vector defaultVel = {0, 0};
 
 
 // Game Vars
-float playerSpeed = 1.0;
-float playerJumpSpeed = 2.5;
-float movingPlatSpeed = .5;
+float playerSpeed = 300.0;
+float playerJumpSpeed = 300.0;
+float movingPlatSpeed = 20;
 
-int gravity = 2;
+int gravity = 200;
+
+bool isPaused = false;
+
+
+// Multiplayer Data
+std::thread myNetworkThread;
+PlayerState myPlayerState;
 
 
 //////////////////////////////////////////////////
@@ -58,6 +69,20 @@ void renderEntity(const Entity& e) {
 
 //////////////////////////////////////////////////
 //
+// Multithreading
+//
+//////////////////////////////////////////////////
+void gameStateChange(NetworkManager myNetwork) {
+	// Loop infinetly
+	// while (true) {
+	// 	myNetwork.
+	// }
+}
+
+void getInput()
+
+//////////////////////////////////////////////////
+//
 // Main Function
 //
 //////////////////////////////////////////////////
@@ -80,15 +105,18 @@ int main(int argc, char* argv[])
 	SDL_Texture* playerTex = IMG_LoadTexture(renderer, "../media/darkworld_character_morwen_idle.png");
 	texCheck(playerTex);
 
-	SDL_Texture* brickTex = IMG_LoadTexture(renderer, "media/brick.png");
+	SDL_Texture* brickTex = IMG_LoadTexture(renderer, "../media/darkworld_platform_brick_idle.png");
 	texCheck(brickTex);
 
+	// Create Dimensions
+	Vector playerDim = {playerTex->w, playerTex->h};
+	Vector brickDim = {brickTex->w, brickTex->h};
 
 	// Entity creation
-	Entity player(playerPos, {playerTex->w, playerTex->h}, playerTex, true, defaultVel);
+	Entity player(playerPos, playerDim, playerTex, true, defaultVel);
 
-	Entity platform_1(platformPos_1, {brickTex->w, brickTex->h}, brickTex, false, defaultVel);
-	Entity movingPlat_1(movingPlatPos_1, {brickTex->w, brickTex->h}, brickTex, false, {movingPlatSpeed, 0}); //Moves to the Right
+	Entity platform_1(platformPos_1, brickDim, brickTex, false, defaultVel);
+	Entity movingPlat_1(movingPlatPos_1, brickDim, brickTex, false, {movingPlatSpeed, 0}); //Moves to the Right
 
 
 	//Creating and Setting Colliders
@@ -106,6 +134,34 @@ int main(int argc, char* argv[])
 	WorldPhysics::setGravity(gravity);
 
 
+	// Time Line Setup
+	Timeline timeline;
+
+
+
+	// // Network Setup
+	NetworkManager myNetwork;
+
+	// Start the client
+	const int REQUEST_PORT = 5555;
+	const int SUBSCRIBE_PORT = 5556;
+	const int HANDSHAKE_PORT = 5557;
+
+	myNetwork.startClient("localhost", REQUEST_PORT, SUBSCRIBE_PORT);
+
+	// Start the client and receive client id
+	int clientId = myNetwork.connectAndHandshake("localhost", HANDSHAKE_PORT);
+	if (clientId == -1) {
+		std::cerr << "Client Failed to be created" << std::endl;
+		exit(1);
+	}
+
+	// Start Networking Thread
+	// std::thread(&gameStateChange, myNetwork);
+	
+	
+
+
 
 	//////////////////////////////////////////////////
 	//
@@ -116,38 +172,43 @@ int main(int argc, char* argv[])
 	// Main game loop condition variable
 	bool running = true;
 
-	std::thread networkThread(network_thread_loop, &running, &networkManager, &localPlayer, &myClientId);
-
 	// SDL_Event to capture event of window being closed
 	SDL_Event event;
 
 	// Scaling Type bool
 	bool constantSizeScale = true;
 
-	// Variables to track the previous state of toggle keys to prevent flickering. These are for scaling, making player spawn, and time management
-	bool graveKeyWasPressedLastFrame = false;
-	bool pKeyWasPressedLastFrame = false;
-	bool oKeyWasPressedLastFrame = false;
-	bool minusKeyWasPressedLastFrame = false;
-	bool equalsKeyWasPressedLastFrame = false;
-	bool zeroKeywasPressedLastFrame = false;
-
 	// The main game loop
-	while (running)
-	{
+	while (running) {
 
-		// Update the timeline and get the current delta time.
-		mainTimeline.update();
-		float dt = mainTimeline.getDeltaTime();
-		const float MAX_DELTA_TIME = 1.0f / 20.0f;
-		if (dt > MAX_DELTA_TIME)
-		{
-			dt = MAX_DELTA_TIME;
-		}
-		while (SDL_PollEvent(&event))
-		{
+		// Time Line Update
+		timeline.update();
+		float d_time = timeline.getDeltaTime();
+
+
+		// Poll for events
+		while (SDL_PollEvent(&event)) {
+
+			// If event is Window Resize
+			if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+				// Constant Scaling
+				if (constantSizeScale) {
+					// Resize as if the screen was still the same
+					SDL_SetRenderLogicalPresentation(renderer, 1920, 1080, SDL_LOGICAL_PRESENTATION_STRETCH);
+				}
+				// Proportional Scaling
+				else {
+					//Get Window Size
+					int w, h;
+					SDL_GetWindowSize(window, &w, &h);
+					// Resize as if the screen was still the same
+					SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
+				}	
+			}
+
+			// Read input from input manager
+			// If the event is close the window
 			if (event.type == SDL_EVENT_QUIT)
-			{
 				running = false;
 
 			// Otherwise look for a key press
@@ -161,6 +222,36 @@ int main(int argc, char* argv[])
 				if (isKeyPressed(SDL_SCANCODE_GRAVE)) {									// Change Scaling Mode
 					constantSizeScale = !constantSizeScale;
 				}
+
+				////////////////////////////////
+				//	Asyc
+				////////////////////////////////
+				// Slow down game
+				if (isKeyPressed(SDL_SCANCODE_COMMA)){
+					timeline.setTimeScale(0.5);
+				}
+				// Regular Speed
+				if (isKeyPressed(SDL_SCANCODE_PERIOD)) {
+					timeline.setTimeScale(1.0);
+				}
+				// Speed Up
+				if (isKeyPressed(SDL_SCANCODE_SLASH)) {
+					timeline.setTimeScale(2.0);
+				}
+				// Pause
+				if (isKeyPressed(SDL_SCANCODE_P)) {
+					//Unpause
+					if (isPaused) {
+						timeline.setTimeScale(1.0);
+						isPaused = false;
+					}
+					//Pause
+					else {
+						timeline.setTimeScale(0.0);
+						isPaused = true;
+					}
+					
+				}
 			}
 		}
 
@@ -171,11 +262,11 @@ int main(int argc, char* argv[])
 		//////////////////////////////////////////////////
 
 		// Update moving platforms position
-		if (movingPlat_1.position.x > movingPlatPos_1.x + 100) movingPlat_1.velocity.x = -movingPlatSpeed;
-		if (movingPlat_1.position.x < movingPlatPos_1.x - 100) movingPlat_1.velocity.x = movingPlatSpeed;
-		movingPlat_1.updatePosition();
+		if (movingPlat_1.position.x > movingPlatPos_1.x + 100) movingPlat_1.velocity.x = -movingPlatSpeed * d_time;
+		if (movingPlat_1.position.x < movingPlatPos_1.x - 100) movingPlat_1.velocity.x = movingPlatSpeed * d_time;
+		movingPlat_1.updatePosition(isPaused);
 
-		platform_1.updatePosition();
+		platform_1.updatePosition(isPaused);
 
 
 		//////////////////////////////////////////////////
@@ -185,34 +276,34 @@ int main(int argc, char* argv[])
 		//////////////////////////////////////////////////
 		// Player Movement
 		if (isKeyPressed(SDL_SCANCODE_W) || isKeyPressed(SDL_SCANCODE_SPACE)) {	// Jump
-				player.velocity.y = -playerJumpSpeed;
-				player.updatePosition();
+				player.velocity.y = -playerJumpSpeed * d_time;
+				player.updatePosition(isPaused);
 		}
 		if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
-			player.velocity.x = -playerSpeed;
-			player.updatePosition();
+			player.velocity.x = -playerSpeed * d_time;
+			player.updatePosition(isPaused);
 		}
 		if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
-			player.velocity.y = playerSpeed;
-			player.updatePosition();
+			player.velocity.y = playerSpeed * d_time;
+			player.updatePosition(isPaused);
 		}
 		if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
-			player.velocity.x = playerSpeed;
-			player.updatePosition();
+			player.velocity.x = playerSpeed * d_time;
+			player.updatePosition(isPaused);
 		}
 
 		
 		
 		// Check if player is coliding with anything
 		if (!overlappingColliders(*player.collider, *platform_1.collider) && !overlappingColliders(*player.collider, *movingPlat_1.collider)) {
-			player.velocity.y += WorldPhysics::getGravity();
+			player.velocity.y += WorldPhysics::getGravity() * d_time;
 		}
 
-		player.updatePosition();
+		player.updatePosition(isPaused);
 		player.velocity = {0, 0};
 
 		//////////////////////////////////////////////////
-    //
+		//
 		// Rendering
 		//
 		//////////////////////////////////////////////////
@@ -224,71 +315,13 @@ int main(int argc, char* argv[])
 		renderEntity(platform_1);
 		renderEntity(movingPlat_1);
 
-		if (police.position.x > rightBound)
-			police.setVelocity({-150.0f, 0});
-		if (police.position.x < leftBound)
-			police.setVelocity({150.0f, 0});
-
-		police.setPosition({police.getPosition().x + police.getVelocity().x * dt, police.getPosition().y});
-		SyncColliderToEntity(police);
-
-		localPlayer.setVelocity({localPlayer.getVelocity().x, localPlayer.getVelocity().y + WorldPhysics::getGravity() * dt});
-
-		Vector nextPosition = localPlayer.getPosition();
-		nextPosition.x += localPlayer.getVelocity().x * dt;
-		nextPosition.y += localPlayer.getVelocity().y * dt;
-
-		Collider testCollider(
-			nextPosition.x - localPlayer.dimensions.x / 2.0f,
-			nextPosition.y - localPlayer.dimensions.y / 2.0f,
-			nextPosition.x + localPlayer.dimensions.x / 2.0f,
-			nextPosition.y + localPlayer.dimensions.y / 2.0f);
-
-		// Check for collision with the platform
-		if (overlappingColliders(testCollider, *platform.collider))
-		{
-			
-			if (localPlayer.getVelocity().y > 0)
-			{
-				nextPosition.y = platform.collider->topLeft.y - localPlayer.dimensions.y / 2.0f;
-				localPlayer.setVelocity({localPlayer.getVelocity().x, 0});
-			}
-		}
-
-		localPlayer.setPosition(nextPosition);
-
-		platformRenderer.render(renderer, platform.position, platform.dimensions);
-		policeRenderer.render(renderer, police.position, police.dimensions);
-
-		// Render the local player
-		if (playerRenderers.count(myClientId))
-		{
-			playerRenderers.at(myClientId).render(renderer, localPlayer.getPosition(), localPlayer.getDimensions());
-		}
-
-		{
-			std::lock_guard<std::mutex> lock(remotePlayersMutex);
-			// Render remote players
-			for (auto const &[id, remote_player_ptr] : remotePlayers)
-			{
-				if (playerRenderers.find(id) == playerRenderers.end())
-				{
-					playerRenderers.emplace(id, RenderComponent(playerTexture));
-				}
-				// Use the pointer to get the entity's data
-				playerRenderers.at(id).render(renderer, remote_player_ptr->getPosition(), remote_player_ptr->getDimensions());
-			}
-		}
-
+		// Clear screen
+		//SDL_RenderClear(renderer);
+		
 		refreshScreen(renderer);
+
 	}
 
-	networkThread.join();
-	SDL_DestroyTexture(playerTexture);
-	SDL_DestroyTexture(platformTexture);
-	SDL_DestroyTexture(policeTexture);
-
-	networkManager.cleanUp();
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();

@@ -88,9 +88,9 @@ float Timeline::getDeltaTime() const {
 
 void Timeline::setTimeScale(float scale) {
     // Set timeScale as long as the param is inclusively between .5 and 2
-    if(!((scale >= 0.5) && (scale <= 2.0))) {
-        return;
-    }
+    // if(!((scale >= 0.5) && (scale <= 2.0))) {
+    //     return;
+    // }
     m_timeScale = scale;
 }
 
