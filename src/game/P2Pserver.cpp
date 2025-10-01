@@ -1,4 +1,6 @@
-// p2p_server_main.cpp (This is a game-specific executable, not an engine file)
+//    Some of the content in this file was generated with Gemini 2.5 Pro.
+//    This citation is to abide by the syllabus requirement that "appropriate citations"
+//    must be given when referring to external sources.
 #include "../engine/headers/P2PServerManager.h"
 #include "../engine/headers/timeline.h"
 #include "../engine/headers/protocol.h" // Your shared protocol file
