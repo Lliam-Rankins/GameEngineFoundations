@@ -350,3 +350,11 @@ void NetworkManager::readClient(int id, int portNum)
         clientRep.send(zmq::buffer(""));
     }
 }
+
+void NetworkManager::updateNpcState(const NPCState& npcState) {
+    std::lock_guard<std::mutex> lock(m_gameStateMut);
+    // Find the right NPC in the array (assuming ID is the index) and update it
+    if (npcState.objectId >= 0 && npcState.objectId < MAX_NPCS) {
+        m_gameState.npcs[npcState.objectId] = npcState;
+    }
+}

@@ -61,7 +61,7 @@ std::mutex remotePlayersMutex;
  * @param localPlayer Pointer to the local player entity.
  * @param myClientId Pointer to the client's ID.
  */
-void network_thread_loop(bool *running, NetworkManager *netManager, Entity *localPlayer, int *myClientId)
+void network_thread_loop(bool *running, Entity *police, NetworkManager *netManager, Entity *localPlayer, int *myClientId)
 {
 	while (*running)
 	{
@@ -99,6 +99,11 @@ void network_thread_loop(bool *running, NetworkManager *netManager, Entity *loca
 						remotePlayers.at(serverPlayer.clientId)->setPosition({serverPlayer.x, serverPlayer.y});
 					}
 				}
+			}
+			if (gs.npcs[0].objectId == 0) // Check if the server sent data for this NPC
+			{
+				// Use the thread-safe setter to update the police car's position
+				police->setPosition({gs.npcs[0].x, gs.npcs[0].y});
 			}
 		}
 
@@ -150,7 +155,7 @@ int main(int argc, char *argv[])
 	int myRequestPort = BASE_REPLY_PORT + myClientId;
 	std::cout << "This client will send updates to port: " << myRequestPort << std::endl;
 
-	// STEP 3: Start the main client sockets, connecting to our unique request port
+	// Start the main client sockets, connecting to our unique request port
 	networkManager.startClient("localhost", myRequestPort, SUBSCRIBE_PORT);
 
 	// Set everything for the platform
@@ -210,7 +215,7 @@ int main(int argc, char *argv[])
 	// Main game loop condition variable
 	bool running = true;
 
-	std::thread networkThread(network_thread_loop, &running, &networkManager, &localPlayer, &myClientId);
+	std::thread networkThread(network_thread_loop, &running, &police, &networkManager, &localPlayer, &myClientId);
 
 	// SDL_Event to capture event of window being closed
 	SDL_Event event;
@@ -238,11 +243,9 @@ int main(int argc, char *argv[])
 		{
 			dt = MAX_DELTA_TIME;
 		}
-		// --- FIX: ADD THIS SAFETY CHECK ---
-		if (dt <= 0)
+		if (dt < 0)
 		{
-			// A negative dt is a clock error, and a zero dt means the game is paused.
-			// In either case, we should skip all logic and rendering for this frame.
+			// A negative dt is a clock error
 			// We can print a warning to the console to know when it happens.
 			if (dt < 0)
 			{
@@ -350,18 +353,6 @@ int main(int argc, char *argv[])
 		// Rendering
 		setupScreen(renderer);
 
-		// Create a leftmost bound for police car position
-		int leftBound = policePos.x - 100;
-		int rightBound = policePos.x + 100;
-
-		if (police.position.x > rightBound)
-			police.setVelocity({-150.0f, 0});
-		if (police.position.x < leftBound)
-			police.setVelocity({150.0f, 0});
-
-		police.setPosition({police.getPosition().x + police.getVelocity().x * dt, police.getPosition().y});
-		SyncColliderToEntity(police);
-
 		localPlayer.setVelocity({localPlayer.getVelocity().x, localPlayer.getVelocity().y + WorldPhysics::getGravity() * dt});
 
 		Vector nextPosition = localPlayer.getPosition();
@@ -388,7 +379,7 @@ int main(int argc, char *argv[])
 		localPlayer.setPosition(nextPosition);
 
 		platformRenderer.render(renderer, platform.position, platform.dimensions);
-		policeRenderer.render(renderer, police.position, police.dimensions);
+		policeRenderer.render(renderer, police.getPosition(), police.getDimensions());
 
 		// Render the local player
 		if (playerRenderers.count(myClientId))

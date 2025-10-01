@@ -16,7 +16,6 @@ namespace zmq
     class socket_t;
 }
 
-
 class NetworkManager
 {
 public:
@@ -49,7 +48,7 @@ public:
     /**
      * Sends player states.
      */
-    void sendPlayerState(const PlayerState& state);
+    void sendPlayerState(const PlayerState &state);
 
     /**
      * Function that runs constantly to update client and server state.
@@ -59,7 +58,7 @@ public:
     /**
         Function that is used to update m_gameState
     */
-    void setGameState(const GameState& newState);
+    void setGameState(const GameState &newState);
 
     GameState getGameState();
 
@@ -67,16 +66,17 @@ public:
      * Connects to the server and performs a handshake to get a client ID.
      * @return The unique client ID assigned by the server, or -1 on failure.
      */
-    int connectAndHandshake(const std::string& serverAddress, int handshakePort);
+    int connectAndHandshake(const std::string &serverAddress, int handshakePort);
 
-    //void handleHandshakes();
+    // void handleHandshakes();
 
     /**
      * Gets the latest game state information
      */
     std::optional<GameState> getLatestGameState();
 
-    
+    void updateNpcState(const NPCState &npcState);
+
 private:
     // Enum to track whether we are a server, a client, or uninitialized.
     enum class Role
@@ -87,7 +87,8 @@ private:
     };
 
     // Struc to help handle and keep track of each client
-    struct Client {
+    struct Client
+    {
         int id;
         int portNum;
         std::thread thread;
@@ -140,4 +141,5 @@ private:
         @param portNum is the port number to be connected at
      */
     void readClient(int id, int portNum);
+
 };
