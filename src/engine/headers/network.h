@@ -52,6 +52,11 @@ public:
     void sendPlayerState(const PlayerState& state);
 
     /**
+     * Sends State of NPC state
+     */
+    void sendNPCState(const NPCState &state);
+
+    /**
      * Function that runs constantly to update client and server state.
      */
     void update();
@@ -62,6 +67,8 @@ public:
     void setGameState(const GameState& newState);
 
     GameState getGameState();
+
+    void updateGameStateNPC(NPCState &npc);
 
     /**
      * Connects to the server and performs a handshake to get a client ID.

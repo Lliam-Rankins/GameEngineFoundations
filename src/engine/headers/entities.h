@@ -5,6 +5,7 @@
 #include <atomic>
 #include "struct.h"
 #include "collisions.h"
+#include "mathEngine.h"
 #include <SDL3_image/SDL_image.h>
 
 
@@ -81,6 +82,7 @@ public:
     void setVelocity(Vector newVelocity);
     void setPhysicsApplied(bool newPhysicsApplied);
     void setCollider(Collider *newCollider);
+    void changeVelocity(Vector addVel);
 
     void makeCollider();
     void updatePosition(bool isPaused);

@@ -131,6 +131,12 @@ void Entity::setVelocity(Vector newVelocity) {
 	this->velocity = newVelocity;
 }
 
+void Entity::changeVelocity(Vector addVel) {
+	std::unique_lock<std::mutex> cv_lock(entityMutex);
+	this->velocity.x += addVel.x;
+	this->velocity.y += addVel.y;
+}
+
 void Entity::setPhysicsApplied(bool newPhysicsApplied) {
 	std::unique_lock<std::mutex> cv_lock(entityMutex);
 	this->physicsApplied = newPhysicsApplied;

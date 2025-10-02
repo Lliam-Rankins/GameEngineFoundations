@@ -113,12 +113,26 @@ void NetworkManager::sendPlayerState(const PlayerState &state)
         // This gets the blocking call out of the main update loop.
         zmq::message_t confirmation;
         auto result = m_requestSocket->recv(confirmation);
+
         if (!result)
         {
             // This block will run if recv() fails.
             // You could log an error here if you want.
             std::cerr << "Warning: Failed to receive server confirmation." << std::endl;
         }
+    }
+}
+
+/**
+ * Sends the players state to the server
+ * @param state is the PlayerState being sent to the server
+ */
+void NetworkManager::sendNPCState(const NPCState &state)
+{
+    if (m_role == Role::SERVER && m_isInitialized)
+    {
+        // Publish game state to all clients
+        m_publishSocket->send(zmq::buffer(&state, sizeof(NPCState)));
     }
 }
 
@@ -134,6 +148,11 @@ void NetworkManager::setGameState(const GameState& newState) {
 GameState NetworkManager::getGameState() {
     std::lock_guard<std::mutex> lock(m_gameStateMut);
     return m_gameState;
+}
+
+void NetworkManager::updateGameStateNPC(NPCState &npc) {
+    std::lock_guard<std::mutex> lock(m_gameStateMut);
+    m_gameState.npcs[npc.objectId] = npc;
 }
 
 /**

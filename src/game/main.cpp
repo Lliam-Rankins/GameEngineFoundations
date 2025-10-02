@@ -11,13 +11,16 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <map>
+#include <utility>
+
 
 // Initialize the window and renderer using SDL method
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
 
 // Window Variables
-Vector windowSize = {1440, 1080};
+Vector windowSize = {720, 540};
 
 // Starting Positions
 Vector playerPos = {100, 100};
@@ -31,7 +34,6 @@ Vector defaultVel = {0, 0};
 // Game Vars
 float playerSpeed = 300.0;
 float playerJumpSpeed = 300.0;
-float movingPlatSpeed = 20;
 
 int gravity = 200;
 
@@ -40,7 +42,16 @@ bool isPaused = false;
 
 // Multiplayer Data
 std::thread myNetworkThread;
-PlayerState myPlayerState;
+std::mutex playersMutex;
+std::mutex npcMutex;
+NetworkManager myNetwork;
+std::map<int, std::unique_ptr<Entity>> remotePlayers;
+std::map<int, std::unique_ptr<Entity>> remoteNPCs;
+Vector remoteMovPlat_Pos;
+
+SDL_Texture* playerTex;
+
+
 
 
 //////////////////////////////////////////////////
@@ -72,14 +83,97 @@ void renderEntity(const Entity& e) {
 // Multithreading
 //
 //////////////////////////////////////////////////
-void gameStateChange(NetworkManager myNetwork) {
-	// Loop infinetly
-	// while (true) {
-	// 	myNetwork.
-	// }
+
+// Rendering Thread
+void rendering(Entity *player, Entity *movingPlat, Entity *plat, int *myID) {
+	// Loop Forever
+	while (true) {
+		// Setup the Screen
+		setupScreen(renderer);
+
+		// For all players and NPCs
+		renderEntity(*player);
+		{
+			// Lock
+			std::unique_lock<std::mutex> cv_lock(playersMutex);
+			for (const auto& pair : remotePlayers) {
+				if (pair.first != *myID) renderEntity(*pair.second);
+			}
+
+			renderEntity(*movingPlat);
+		}
+		renderEntity(*plat);
+
+
+		// Wait
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
 }
 
-void getInput()
+// Network Thread
+void networking(NetworkManager *myNetwork, int *myID, Entity *localPlayer, Entity *movingPlat) {
+	// Loop Forever
+	while (true) {
+		PlayerState myPlayerState;
+
+		Vector pos = localPlayer->getPosition();
+		myPlayerState.clientId = *myID;
+		myPlayerState.x = pos.x;
+		myPlayerState.y = pos.y; 
+
+		myNetwork->sendPlayerState(myPlayerState);
+		myNetwork->update();
+		
+		auto newGameState = myNetwork->getLatestGameState();
+
+		// Check to make sure that there is a game state
+		if (!newGameState.has_value()) continue;
+
+		GameState gameState = newGameState.value();
+
+		//Update remotePlayers
+		{
+			// Lock
+			std::unique_lock<std::mutex> cv_lock(playersMutex);
+
+			// For every client
+			for (int i = 0; i < gameState.num_clients; i++) {
+				// Grab player i
+				PlayerState playerState = gameState.players[i];
+
+				// Not me
+				if (playerState.clientId == *myID) continue;
+
+				// Otherwise, Update or create new player
+				if (remotePlayers.find(playerState.clientId) == remotePlayers.end()) {		
+					remotePlayers[i] = std::make_unique<Entity>(playerPos, playerTex, true);
+				}
+				else {
+					if (!isPaused) remotePlayers[i]->setPosition({playerState.x, playerState.y});
+				}
+			}
+		}
+
+		//Update NPCs
+		{
+			// Lock
+			std::unique_lock<std::mutex> cv_lock(npcMutex);
+
+			NPCState movingPlatformState = gameState.npcs[0];
+
+			// Making Sure we arent paused
+			if (!isPaused) movingPlat->setPosition({movingPlatformState.x, movingPlatformState.y});
+		}
+
+
+		// Wait
+		std::this_thread::sleep_for(std::chrono::milliseconds(33));
+	}
+}
+
+void handleMovement() {
+	
+}
 
 //////////////////////////////////////////////////
 //
@@ -102,7 +196,7 @@ int main(int argc, char* argv[])
 
 
 	//Load Textures
-	SDL_Texture* playerTex = IMG_LoadTexture(renderer, "../media/darkworld_character_morwen_idle.png");
+	playerTex = IMG_LoadTexture(renderer, "../media/darkworld_character_morwen_idle.png");
 	texCheck(playerTex);
 
 	SDL_Texture* brickTex = IMG_LoadTexture(renderer, "../media/darkworld_platform_brick_idle.png");
@@ -113,10 +207,11 @@ int main(int argc, char* argv[])
 	Vector brickDim = {brickTex->w, brickTex->h};
 
 	// Entity creation
-	Entity player(playerPos, playerDim, playerTex, true, defaultVel);
+	// players[0] = std::make_unique<Entity>(playerPos, playerTex, true);
+	Entity player = Entity(playerPos, playerTex, true);
 
 	Entity platform_1(platformPos_1, brickDim, brickTex, false, defaultVel);
-	Entity movingPlat_1(movingPlatPos_1, brickDim, brickTex, false, {movingPlatSpeed, 0}); //Moves to the Right
+	Entity localMovingPlat(movingPlatPos_1, brickDim, brickTex, false); //Moves to the Right
 
 
 	//Creating and Setting Colliders
@@ -127,7 +222,7 @@ int main(int argc, char* argv[])
 	platform_1.setCollider(&platformCol_1);
 
 	Collider movingPlatCol_1(0, 0, 0, 0);
-	movingPlat_1.setCollider(&movingPlatCol_1);
+	localMovingPlat.setCollider(&movingPlatCol_1);
 
 
 	// Setting Gravity
@@ -138,29 +233,43 @@ int main(int argc, char* argv[])
 	Timeline timeline;
 
 
-
-	// // Network Setup
+	////////////////////
+	// Network Setup
+	////////////////////
 	NetworkManager myNetwork;
 
 	// Start the client
-	const int REQUEST_PORT = 5555;
 	const int SUBSCRIBE_PORT = 5556;
 	const int HANDSHAKE_PORT = 5557;
+	const int REQUEST_BASE_PORT = 5600;
 
-	myNetwork.startClient("localhost", REQUEST_PORT, SUBSCRIBE_PORT);
-
-	// Start the client and receive client id
-	int clientId = myNetwork.connectAndHandshake("localhost", HANDSHAKE_PORT);
-	if (clientId == -1) {
+	int myID = myNetwork.connectAndHandshake("localhost", HANDSHAKE_PORT);
+	if (myID == -1) {
 		std::cerr << "Client Failed to be created" << std::endl;
 		exit(1);
 	}
 
-	// Start Networking Thread
-	// std::thread(&gameStateChange, myNetwork);
-	
+	std::cout << "Client Id: " << myID << std::endl;
+	myNetwork.startClient("localhost", REQUEST_BASE_PORT + myID, SUBSCRIBE_PORT);
+
+	// Start the client and receive client id
 	
 
+	
+
+	
+
+	//////////////////////////////////////////////////
+	//
+	// Multi Threading
+	//
+	//////////////////////////////////////////////////
+
+	// Start Networking Thread
+	std::thread netThread(&networking, &myNetwork, &myID, &player, &localMovingPlat);
+
+	// Start Rendering Thread
+	std::thread renderThread(&rendering, &player, &localMovingPlat, &platform_1, &myID);
 
 
 	//////////////////////////////////////////////////
@@ -260,14 +369,7 @@ int main(int argc, char* argv[])
 		// Gameplay Updates
 		//
 		//////////////////////////////////////////////////
-
-		// Update moving platforms position
-		if (movingPlat_1.position.x > movingPlatPos_1.x + 100) movingPlat_1.velocity.x = -movingPlatSpeed * d_time;
-		if (movingPlat_1.position.x < movingPlatPos_1.x - 100) movingPlat_1.velocity.x = movingPlatSpeed * d_time;
-		movingPlat_1.updatePosition(isPaused);
-
 		platform_1.updatePosition(isPaused);
-
 
 		//////////////////////////////////////////////////
 		//
@@ -276,31 +378,29 @@ int main(int argc, char* argv[])
 		//////////////////////////////////////////////////
 		// Player Movement
 		if (isKeyPressed(SDL_SCANCODE_W) || isKeyPressed(SDL_SCANCODE_SPACE)) {	// Jump
-				player.velocity.y = -playerJumpSpeed * d_time;
-				player.updatePosition(isPaused);
+			player.changeVelocity({0, -playerJumpSpeed * d_time});
 		}
-		if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
-			player.velocity.x = -playerSpeed * d_time;
-			player.updatePosition(isPaused);
+		if (isKeyPressed(SDL_SCANCODE_A)) {	
+			player.changeVelocity({-playerSpeed * d_time, 0});					// Left
 		}
 		if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
-			player.velocity.y = playerSpeed * d_time;
-			player.updatePosition(isPaused);
+			player.changeVelocity({0, playerJumpSpeed * d_time});
 		}
 		if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
-			player.velocity.x = playerSpeed * d_time;
-			player.updatePosition(isPaused);
+			player.changeVelocity({playerSpeed * d_time, 0});	
 		}
 
 		
 		
-		// Check if player is coliding with anything
-		if (!overlappingColliders(*player.collider, *platform_1.collider) && !overlappingColliders(*player.collider, *movingPlat_1.collider)) {
-			player.velocity.y += WorldPhysics::getGravity() * d_time;
+		// Check if player is not coliding with anything
+		if (!overlappingColliders(*player.collider, *platform_1.collider) && !overlappingColliders(*player.collider, *localMovingPlat.collider)) {
+			player.changeVelocity({0, WorldPhysics::getGravity() * d_time});
 		}
 
 		player.updatePosition(isPaused);
-		player.velocity = {0, 0};
+		player.setVelocity({0,0});
+
+
 
 		//////////////////////////////////////////////////
 		//
@@ -308,12 +408,9 @@ int main(int argc, char* argv[])
 		//
 		//////////////////////////////////////////////////
 
-		// Setup the Screen
-		setupScreen(renderer);
+		
 
-		renderEntity(player);
-		renderEntity(platform_1);
-		renderEntity(movingPlat_1);
+			
 
 		// Clear screen
 		//SDL_RenderClear(renderer);
