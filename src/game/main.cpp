@@ -370,6 +370,7 @@ int main(int argc, char* argv[])
 		//
 		//////////////////////////////////////////////////
 		platform_1.updatePosition(isPaused);
+		localMovingPlat.updatePosition(isPaused);
 
 		//////////////////////////////////////////////////
 		//
