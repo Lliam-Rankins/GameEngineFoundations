@@ -9,6 +9,7 @@
 #include "protocol.h"
 #include <thread>
 #include <mutex>
+#include <map>
 
 namespace zmq
 {
@@ -93,7 +94,7 @@ private:
         std::thread thread;
     };
 
-    Client m_clientArr[MAX_PLAYERS];
+    // TODO: fix this Client m_clientArr[MAX_PLAYERS];
     std::mutex m_gameStateMut;
 
     Role m_role;

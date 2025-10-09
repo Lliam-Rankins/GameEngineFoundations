@@ -10,3 +10,4 @@ void GameObject::setComponent(const std::string& key, Component value) {
 bool GameObject::hasComponent(const std::string& key) const {
     return components.find(key) != components.end();
 }
+

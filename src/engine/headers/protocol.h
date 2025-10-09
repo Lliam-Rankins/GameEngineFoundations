@@ -1,7 +1,8 @@
 // protocol.h
 #pragma once
 
-const int MAX_PLAYERS = 4; // The max number of players your server can handle.
+#include <vector>
+
 const int MAX_NPCS = 16;
 
 // Data for a single player. Sent from Client -> Server.
@@ -21,8 +22,8 @@ struct NPCState {
 
 // Complete data for the whole game world. Sent from Server -> all Clients.
 struct GameState {
-    int num_clients = 0; // How many players are currently connected.
-    PlayerState players[MAX_PLAYERS]; // An array holding the state of every player.
+    int num_clients = 0;
+    std::vector<PlayerState> players; // 
     NPCState npcs[MAX_NPCS];
 };
 
