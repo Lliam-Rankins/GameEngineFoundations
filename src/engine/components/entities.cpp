@@ -3,6 +3,7 @@
 */
 
 #include "../headers/entities.h"
+#include "../headers/GameObject.h"
 #include <SDL3/SDL.h> // Included for SDL_QueryTexture if needed
 
 /*

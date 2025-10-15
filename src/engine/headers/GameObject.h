@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <variant>
+#include "../headers/struct.h"
 
 /**
  * @file GameObject.hpp
@@ -15,7 +16,7 @@
  */
 
 // A type alias for a std::variant that can hold different data types for a component.
-using Component = std::variant<int, float, bool, SDL_Color, std::string>;
+using Component = std::variant<int, float, bool, SDL_Color, std::string, Vector>;
 
 /**
  * @class GameObject
