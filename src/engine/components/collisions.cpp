@@ -25,19 +25,19 @@
 // }
 
 // FIX THIS DOC LATER, this just calculates a collider and returns it, use this when updating pos
-void updateCollider(GameObject &obj) {
-	if(!(obj.hasComponent("Position") && obj.hasComponent("Dimensions"))) {
-		// Error
-	}
-	Vector pos = obj.getComponent<Vector>("Position");
-	Vector dim = obj.getComponent<Vector>("Dimensions");
-	Collider newCol;
-	newCol.topLeft.x = pos.x;
-	newCol.topLeft.y = pos.y;
-	newCol.bottomLeft.x = pos.x + dim.x;
-	newCol.bottomRight.y = pos.y + dim.y;
-	return newCol;
-}
+// void updateCollider(GameObject &obj) {
+// 	if(!(obj.hasComponent("Position") && obj.hasComponent("Dimensions"))) {
+// 		std::cout << "Improper object!" << std::endl;
+// 	}
+// 	Vector pos = obj.getComponent<Vector>("Position");
+// 	Vector dim = obj.getComponent<Vector>("Dimensions");
+// 	Collider newCol;
+// 	newCol.topLeft.x = pos.x;
+// 	newCol.topLeft.y = pos.y;
+// 	newCol.bottomLeft.x = pos.x + dim.x;
+// 	newCol.bottomRight.y = pos.y + dim.y;
+// 	obj.setComponent("Collider", newCol);
+// }
 
 
 /**
@@ -45,17 +45,7 @@ void updateCollider(GameObject &obj) {
   @param a, b are two Collider instances
   @return true if a and b collide, false otherwise
 */
-bool overlappingColliders1(GameObject &objA, GameObject &objB) {
-
-	if(!(objA.hasComponent("Position") && objA.hasComponent("Dimensions") && objB.hasComponent("Position") && objB.hasComponent("Dimensions"))) {
-		// Error
-	}
-
-	Vector posA = objA.getComponent<Vector>("Position");
-	Vector dimA = objA.getComponent<Vector>("Dimensions");
-
-	Vector posB = objB.getComponent<Vector>("Position");
-	Vector dimB = objB.getComponent<Vector>("Dimensions");
+bool overlappingColliders1(Vector posA, Vector dimA, Vector posB, vector dimB) {
 
 	Collider a;
 	a.topLeft.x = posA.x;
@@ -94,17 +84,7 @@ bool overlappingColliders1(GameObject &objA, GameObject &objB) {
   @param a, b are two Collider instances
   @return true if a and b collide, false otherwise
 */
-bool overlappingColliders2(Collider a, Collider b) {
-
-	if(!(objA.hasComponent("Position") && objA.hasComponent("Dimensions") && objB.hasComponent("Position") && objB.hasComponent("Dimensions"))) {
-		// Error
-	}
-
-	Vector posA = objA.getComponent<Vector>("Position");
-	Vector dimA = objA.getComponent<Vector>("Dimensions");
-
-	Vector posB = objB.getComponent<Vector>("Position");
-	Vector dimB = objB.getComponent<Vector>("Dimensions");
+bool overlappingColliders2(Vector posA, Vector dimA, Vector posB, vector dimB) {
 
 	Collider a;
 	a.topLeft.x = posA.x;

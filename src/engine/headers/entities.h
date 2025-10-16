@@ -87,6 +87,6 @@
 // };
 
 
-Vector updatePosition(Vector pos, Vector vel, bool isPaused);
+Vector updatePosition(GameObject &obj, bool isPaused);
 
 #endif // ENTITIES_H
