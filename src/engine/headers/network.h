@@ -33,6 +33,15 @@ public:
     bool startServer(int replyPort, int publishPort, int handshakePort);
 
     /**
+     * Starts the server at the listed port.
+     * @param replyPort the port for replying
+     * @param publishPort the port for publishing
+     * @param handshakePort is the port to handle handshakes at from new clients
+     * @param clientTimeout is ticks needed to consider a client 'disconected'
+     */
+    bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout);
+
+    /**
      * Starts the client and connects to the server address at the port given.
      * -- Run this after connectAndHandshake to generate a unique requestPort using the returned id
      * @param serverAddress the address of the server
@@ -116,6 +125,9 @@ private:
 
     // Boolean value to ensure that whatever needed to happen goes well before proceeding (starting server, etc)
     bool m_isInitialized;
+
+    // Integer value for tick count without receiving client information to consider them timedout
+    int m_clientTimeout;
 
     std::atomic<bool> m_running{false};
 

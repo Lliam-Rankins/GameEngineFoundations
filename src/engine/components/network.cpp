@@ -25,8 +25,10 @@ NetworkManager::~NetworkManager()
  * @param replyPort the reply port #
  * @param publishPort the publish port #
  */
-bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort)
+bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout)
 {
+    // Assign client timeout value
+    m_clientTimeout = clientTimeout;
 
     // Create the context and store it in the member variable
     m_context = std::make_unique<zmq::context_t>(1);
@@ -53,6 +55,15 @@ bool NetworkManager::startServer(int startReplyPort, int publishPort, int handsh
     m_handshakeThread = std::thread(&NetworkManager::handleHandshakes, this);
 
     return true;
+}
+
+/**
+ * Starts the server.
+ * @param replyPort the reply port #
+ * @param publishPort the publish port #
+ */
+bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort) {
+    NetworkManager::startServer(startReplyPort, publishPort, handshakePort, 50);
 }
 
 /**
@@ -351,6 +362,10 @@ void NetworkManager::readClient(int id, int portNum)
     zmq::socket_t clientRep(*m_context, zmq::socket_type::rep);
     clientRep.bind("tcp://*:" + std::to_string(portNum));
 
+    // Create time since last update
+    std::chrono::high_resolution_clock::time_point lastTimeRecv;
+    lastTimeRecv = std::chrono::high_resolution_clock::now();
+
     // Continuously loop while the server is running
     while (m_running)
     {
@@ -358,13 +373,35 @@ void NetworkManager::readClient(int id, int portNum)
         zmq::message_t message;
         if (!clientRep.recv(message, zmq::recv_flags::dontwait))
         {
+            // Check duration of elapsed time
+            std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
+            int elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTimeRecv).count();
+            if (elapsedTime >= m_clientTimeout) {
+                // Timeout Detected, disconect current client
+                {
+                    // Lock Clients and erase this client
+                    std::lock_guard<std::mutex> lock(m_clientsMutex);
+                    m_clients.erase(id);
+                }
+                {
+                    // Lock Player states before erasing
+                    std::lock_guard<std::mutex> lock(m_playerStatesMutex);
+                    m_playerStates.erase(id);
+                }
+
+                // Stop reading client (Break)
+                break;
+            };
+
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
             continue;
         }
 
+        // Received Message, reset timer;
+        lastTimeRecv = std::chrono::high_resolution_clock::now();
+
         // Decode the message
         PlayerState clientState = *message.data<PlayerState>();
-
         {
             std::lock_guard<std::mutex> lock(m_playerStatesMutex);
             m_playerStates[id] = clientState;

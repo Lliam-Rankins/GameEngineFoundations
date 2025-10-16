@@ -12,8 +12,9 @@ int main(int argc, char* argv[]) {
     // Use the same ports you configured in the client
     const int REPLY_PORT = 5555;
     const int PUBLISH_PORT = 5556;
+    const int HANDSHAKE_PORT = 5557;
 
-    if (!serverManager.startServer(REPLY_PORT, PUBLISH_PORT)) {
+    if (!serverManager.startServer(REPLY_PORT, PUBLISH_PORT, HANDSHAKE_PORT)) {
         std::cerr << "Failed to start the server." << std::endl;
         return 1;
     }
