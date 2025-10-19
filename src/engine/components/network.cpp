@@ -63,7 +63,7 @@ bool NetworkManager::startServer(int startReplyPort, int publishPort, int handsh
  * @param publishPort the publish port #
  */
 bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort) {
-    NetworkManager::startServer(startReplyPort, publishPort, handshakePort, 50);
+    return NetworkManager::startServer(startReplyPort, publishPort, handshakePort, 50);
 }
 
 /**

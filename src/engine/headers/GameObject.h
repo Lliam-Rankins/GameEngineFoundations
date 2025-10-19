@@ -16,7 +16,7 @@
  */
 
 // A type alias for a std::variant that can hold different data types for a component.
-using Component = std::variant<int, float, bool, SDL_Color, std::string, Vector>;
+using Component = std::variant<int, float, bool, SDL_Color, SDL_Texture*, std::string, Vector>;
 
 /**
  * @class GameObject
