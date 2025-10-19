@@ -1,4 +1,4 @@
-#include "GameObject.h"
+#include "../headers/GameObject.h"
 
 //Sets or updates a component on the GameObject.
 void GameObject::setComponent(const std::string& key, Component value) {

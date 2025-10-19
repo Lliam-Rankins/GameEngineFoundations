@@ -12,7 +12,6 @@ union Data {
     float f;
     char str[16];
     bool b;
-    Vector v;
 };
 
 // Data for a single player. Sent from Client -> Server.

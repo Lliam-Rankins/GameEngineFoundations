@@ -45,19 +45,17 @@
   @param a, b are two Collider instances
   @return true if a and b collide, false otherwise
 */
-bool overlappingColliders1(Vector posA, Vector dimA, Vector posB, vector dimB) {
+bool overlappingColliders1(GameObject& objA, GameObject& objB) {
 
 	Collider a;
-	a.topLeft.x = posA.x;
-	a.topLeft.y = posA.y;
-	a.bottomLeft.x = posA.x + dimA.x;
-	a.bottomRight.y = posA.y + dimA.y;
+	a.topLeft = objA.getComponent<Vector>("Position");
+	a.bottomRight.x = a.topLeft.x + objA.getComponent<Vector>("Dimensions").x;
+	a.bottomRight.y = a.topLeft.y + objA.getComponent<Vector>("Dimensions").y;
 
 	Collider b;
-	b.topLeft.x = posB.x;
-	b.topLeft.y = posB.y;
-	b.bottomLeft.x = posB.x + dimB.x;
-	b.bottomRight.y = posB.y + dimB.y;
+	b.topLeft = objB.getComponent<Vector>("Position");
+	b.bottomRight.x = b.topLeft.x + objB.getComponent<Vector>("Dimensions").x;
+	b.bottomRight.y = b.topLeft.y + objB.getComponent<Vector>("Dimensions").y;
 
 	// Check if x values for a and b overlap at all
 	bool overlappingX = false;
@@ -84,19 +82,17 @@ bool overlappingColliders1(Vector posA, Vector dimA, Vector posB, vector dimB) {
   @param a, b are two Collider instances
   @return true if a and b collide, false otherwise
 */
-bool overlappingColliders2(Vector posA, Vector dimA, Vector posB, vector dimB) {
+bool overlappingColliders2(GameObject& objA, GameObject& objB) {
 
 	Collider a;
-	a.topLeft.x = posA.x;
-	a.topLeft.y = posA.y;
-	a.bottomLeft.x = posA.x + dimA.x;
-	a.bottomRight.y = posA.y + dimA.y;
+	a.topLeft = objA.getComponent<Vector>("Position");
+	a.bottomRight.x = a.topLeft.x + objA.getComponent<Vector>("Dimensions").x;
+	a.bottomRight.y = a.topLeft.y + objA.getComponent<Vector>("Dimensions").y;
 
 	Collider b;
-	b.topLeft.x = posB.x;
-	b.topLeft.y = posB.y;
-	b.bottomLeft.x = posB.x + dimB.x;
-	b.bottomRight.y = posB.y + dimB.y;
+	b.topLeft = objB.getComponent<Vector>("Position");
+	b.bottomRight.x = b.topLeft.x + objB.getComponent<Vector>("Dimensions").x;
+	b.bottomRight.y = b.topLeft.y + objB.getComponent<Vector>("Dimensions").y;
 
 	// Check if x values for a and b overlap at all
 	bool overlappingX = false;

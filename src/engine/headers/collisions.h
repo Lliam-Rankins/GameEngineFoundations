@@ -43,7 +43,7 @@
 struct Collider {
 	Vector topLeft;
 	Vector bottomRight;
-}
+};
 
 bool overlappingColliders1(GameObject &objA, GameObject &objB);
 bool overlappingColliders2(GameObject &objA, GameObject &objB);

@@ -39,7 +39,7 @@ public:
      * @param handshakePort is the port to handle handshakes at from new clients
      * @param clientTimeout is ticks needed to consider a client 'disconected'
      */
-    bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout);
+    bool startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout);
 
     /**
      * Starts the client and connects to the server address at the port given.
@@ -102,7 +102,7 @@ private:
 
     std::map<int, ClientConnection> m_clients;
     std::mutex m_clientsMutex;
-    std::mutex m_gameStateMut;
+    //std::mutex m_gameStateMut;
     std::map<int, PlayerState> m_playerStates;
     std::mutex m_playerStatesMutex;
     
