@@ -11,6 +11,8 @@
 #include <mutex>
 #include <map>
 #include <atomic>
+#include <vector>
+#include "GameObject.h"
 
 namespace zmq
 {
@@ -23,6 +25,7 @@ class NetworkManager
 public:
     NetworkManager();
     ~NetworkManager();
+    void setClientId(int id) { m_clientId = id; }
 
     /**
      * Starts the server at the listed port.
@@ -102,12 +105,14 @@ private:
 
     std::map<int, ClientConnection> m_clients;
     std::mutex m_clientsMutex;
-    //std::mutex m_gameStateMut;
     std::map<int, PlayerState> m_playerStates;
     std::mutex m_playerStatesMutex;
-    
+    std::vector<GameObject *> *m_masterObjectList;
+    std::mutex *m_objectListMutex;
     Role m_role;
-
+    
+    int m_clientId;
+    
     // The server's threads
     std::thread m_updateThread;
     std::thread m_handshakeThread;

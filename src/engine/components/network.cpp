@@ -6,7 +6,8 @@
 #include "../headers/protocol.h"
 #include <zmq.hpp>
 #include <iostream>
-
+#include <set>
+#include <algorithm>
 /**
  * Default constructor.
  */
@@ -275,31 +276,59 @@ std::optional<GameState> NetworkManager::getLatestGameState()
  */
 void NetworkManager::messageLooper()
 {
-    // While the server is running
     while (m_running)
     {
-        // Get the current  GameState
         GameState state_to_send;
+
+        // --- BRIDGE LOGIC: BUILD PACKET FROM GAMEOBJECTS ---
         {
-            std::lock_guard<std::mutex> lock(m_playerStatesMutex);
-            state_to_send.players.reserve(m_playerStates.size());
-            for (const auto &pair : m_playerStates)
+            std::lock_guard<std::mutex> lock(*m_objectListMutex);
+
+            // Reserve space for efficiency
+            state_to_send.players.reserve(m_clients.size());
+
+            int npc_idx = 0;
+            // Initialize all NPCs to inactive
+            for (int i = 0; i < MAX_NPCS; ++i)
+                state_to_send.npcs[i].objectId = -1;
+
+            for (const auto &obj : *m_masterObjectList)
             {
-                state_to_send.players.push_back(pair.second);
+                if (obj->hasComponent("is_player"))
+                {
+                    PlayerState p;
+                    p.clientId = obj->getComponent<int>("client_id");
+                    Vector pos = obj->getComponent<Vector>("position");
+                    p.x = pos.x;
+                    p.y = pos.y;
+                    state_to_send.players.push_back(p);
+                }
+                else if (obj->hasComponent("is_npc") && npc_idx < MAX_NPCS)
+                {
+                    NPCState &n = state_to_send.npcs[npc_idx];
+                    n.objectId = obj->getComponent<int>("npc_id");
+                    Vector pos = obj->getComponent<Vector>("position");
+                    n.x = pos.x;
+                    n.y = pos.y;
+                    npc_idx++;
+                }
+                // Platforms and other static objects can also be sent this way
+                // if you add them to your GameState struct.
             }
             state_to_send.num_clients = state_to_send.players.size();
         }
+        // --- END BRIDGE LOGIC ---
+
+        // --- SERIALIZATION (Unchanged) ---
         const size_t num_players = state_to_send.players.size();
         const size_t players_data_size = num_players * sizeof(PlayerState);
         const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
-        const size_t total_size = sizeof(int) + players_data_size + npc_data_size;
-
+        const size_t total_size = sizeof(size_t) + players_data_size + npc_data_size;
         zmq::message_t message(total_size);
         char *buffer = message.data<char>();
 
-        // Copy num_players, then player data, then NPC data into the buffer.
-        memcpy(buffer, &num_players, sizeof(int));
-        buffer += sizeof(int);
+        memcpy(buffer, &num_players, sizeof(size_t));
+        buffer += sizeof(size_t);
         if (num_players > 0)
         {
             memcpy(buffer, state_to_send.players.data(), players_data_size);
@@ -307,7 +336,15 @@ void NetworkManager::messageLooper()
         }
         memcpy(buffer, &state_to_send.npcs, npc_data_size);
 
-        m_publishSocket->send(message, zmq::send_flags::none);
+        auto sent = m_publishSocket->send(message, zmq::send_flags::none);
+        if (!sent)
+        {
+            std::cerr << "[Network] Warning: publish send failed" << std::endl;
+        }
+        else
+        {
+            std::cout << "[Network] Published GameState (players=" << state_to_send.players.size() << ")" << std::endl;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(32));
     }
 }
