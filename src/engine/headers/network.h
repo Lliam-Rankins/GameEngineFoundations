@@ -11,6 +11,8 @@
 #include <mutex>
 #include <map>
 #include <atomic>
+#include <vector>            // <-- ADD THIS
+#include "GameObject.h"
 
 namespace zmq
 {
@@ -29,8 +31,12 @@ public:
      * @param replyPort the port for replying
      * @param publishPort the port for publishing
      * @param handshakePort is the port to handle handshakes at from new clients
+     * @param objectList is the server's master list of GameObjects
+     * @param objectMutex is the mutex to protect the server's master list of GameObjects
      */
-    bool startServer(int replyPort, int publishPort, int handshakePort);
+    bool startServer(int replyPort, int publishPort, int handshakePort, 
+                     std::vector<GameObject*>& objectList, std::mutex& objectMutex);
+
 
     /**
      * Starts the server at the listed port.
@@ -38,9 +44,11 @@ public:
      * @param publishPort the port for publishing
      * @param handshakePort is the port to handle handshakes at from new clients
      * @param clientTimeout is ticks needed to consider a client 'disconected'
+     * @param objectList is the server's master list of GameObjects
+     * @param objectMutex is the mutex to protect the server's master list of GameObjects
      */
-    bool startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout);
-
+    bool startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout, 
+                     std::vector<GameObject*>& objectList, std::mutex& objectMutex);
     /**
      * Starts the client and connects to the server address at the port given.
      * -- Run this after connectAndHandshake to generate a unique requestPort using the returned id
@@ -109,7 +117,8 @@ private:
     //std::mutex m_gameStateMut;
     std::map<int, PlayerState> m_playerStates;
     std::mutex m_playerStatesMutex;
-    
+    std::vector<GameObject*>* m_masterObjectList;
+    std::mutex* m_objectListMutex;
     Role m_role;
 
     // The server's threads

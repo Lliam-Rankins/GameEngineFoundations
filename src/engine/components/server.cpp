@@ -1,14 +1,17 @@
 #include <iostream>
 #include <thread> // Required for std::this_thread::sleep_for
 #include <chrono> // Required for std::chrono::milliseconds
-
+#include <vector>
+#include <mutex>
 #include "../headers/network.h"
 #include "../headers/timeline.h"
+#include "../headers/GameObject.h"
 
 int main(int argc, char *argv[])
 {
     std::cout << "Starting server..." << std::endl;
-
+    std::vector<GameObject *> serverMasterObjectList;
+    std::mutex serverObjectListMutex;
     NetworkManager serverManager;
 
     // Use the same ports you configured in the client
@@ -16,7 +19,8 @@ int main(int argc, char *argv[])
     const int PUBLISH_PORT = 5556;
     const int HANDSHAKE_PORT = 5557;
 
-    if (!serverManager.startServer(REPLY_PORT, PUBLISH_PORT, HANDSHAKE_PORT)) {
+    if (!serverManager.startServer(REPLY_PORT, PUBLISH_PORT, HANDSHAKE_PORT, serverMasterObjectList, serverObjectListMutex))
+    {
         std::cerr << "Failed to start the server." << std::endl;
         return 1;
     }
@@ -27,14 +31,16 @@ int main(int argc, char *argv[])
     float policeCarVelocityX = 150.0f;
 
     // The main server loop now runs the simulation.
-    while (true) {
+    while (true)
+    {
         serverTimeline.update();
         float dt = serverTimeline.getDeltaTime();
 
         // 1. Simulate the NPC on the server
         int leftBound = 860 - 100;
         int rightBound = 860 + 100;
-        if (policeCarState.x > rightBound || policeCarState.x < leftBound) {
+        if (policeCarState.x > rightBound || policeCarState.x < leftBound)
+        {
             policeCarVelocityX *= -1.0f;
         }
         policeCarState.x += policeCarVelocityX * dt;

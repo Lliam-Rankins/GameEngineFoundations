@@ -7,6 +7,7 @@
 #include <zmq.hpp>
 #include <iostream>
 
+
 /**
  * Default constructor.
  */
@@ -25,11 +26,13 @@ NetworkManager::~NetworkManager()
  * @param replyPort the reply port #
  * @param publishPort the publish port #
  */
-bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout)
+bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout,
+                                 std::vector<GameObject*>& objectList, std::mutex& objectMutex)
 {
-    // Assign client timeout value
-    m_clientTimeout = clientTimeout;
 
+    m_masterObjectList = &objectList;
+    m_objectListMutex = &objectMutex;
+    
     // Create the context and store it in the member variable
     m_context = std::make_unique<zmq::context_t>(1);
 
@@ -55,15 +58,6 @@ bool NetworkManager::startServer(int startReplyPort, int publishPort, int handsh
     m_handshakeThread = std::thread(&NetworkManager::handleHandshakes, this);
 
     return true;
-}
-
-/**
- * Starts the server.
- * @param replyPort the reply port #
- * @param publishPort the publish port #
- */
-bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort) {
-    return NetworkManager::startServer(startReplyPort, publishPort, handshakePort, 50);
 }
 
 /**
@@ -223,6 +217,7 @@ void NetworkManager::update()
     // If a new GameState was successfully received, update client's GameState
     if (result.has_value() && result.value() > 0)
     {
+        // --- DESERIALIZATION LOGIC (No change needed here) ---
         GameState newState;
         const char *buffer = gameStateMessage.data<const char>();
 
@@ -246,7 +241,6 @@ void NetworkManager::update()
             m_gameState = std::move(newState);
             m_hasReceivedFirstState = true;
         }
-
     }
 }
 
@@ -362,10 +356,6 @@ void NetworkManager::readClient(int id, int portNum)
     zmq::socket_t clientRep(*m_context, zmq::socket_type::rep);
     clientRep.bind("tcp://*:" + std::to_string(portNum));
 
-    // Create time since last update
-    std::chrono::high_resolution_clock::time_point lastTimeRecv;
-    lastTimeRecv = std::chrono::high_resolution_clock::now();
-
     // Continuously loop while the server is running
     while (m_running)
     {
@@ -373,47 +363,17 @@ void NetworkManager::readClient(int id, int portNum)
         zmq::message_t message;
         if (!clientRep.recv(message, zmq::recv_flags::dontwait))
         {
-            // Check duration of elapsed time
-            std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
-            int elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTimeRecv).count();
-            if (elapsedTime >= m_clientTimeout) {
-                // Timeout Detected, disconect current client
-                {
-                    // Lock Clients and erase this client
-                    std::lock_guard<std::mutex> lock(m_clientsMutex);
-                    m_clients.erase(id);
-                }
-                {
-                    // Lock Player states before erasing
-                    std::lock_guard<std::mutex> lock(m_playerStatesMutex);
-                    m_playerStates.erase(id);
-                }
-
-                // Stop reading client (Break)
-                break;
-            };
-
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
             continue;
         }
 
-        // Received Message, reset timer;
-        lastTimeRecv = std::chrono::high_resolution_clock::now();
-
         // Decode the message
         PlayerState clientState = *message.data<PlayerState>();
+
         {
             std::lock_guard<std::mutex> lock(m_playerStatesMutex);
             m_playerStates[id] = clientState;
         }
         clientRep.send(zmq::buffer(""));
-    }
-}
-
-void NetworkManager::updateNpcState(const NPCState& npcState) {
-    std::lock_guard<std::mutex> lock(m_gameStateMut);
-    // Find the right NPC in the array (assuming ID is the index) and update it
-    if (npcState.objectId >= 0 && npcState.objectId < MAX_NPCS) {
-        m_gameState.npcs[npcState.objectId] = npcState;
     }
 }
