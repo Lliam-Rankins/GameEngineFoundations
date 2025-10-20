@@ -11,7 +11,7 @@
 #include <mutex>
 #include <map>
 #include <atomic>
-#include <vector>            // <-- ADD THIS
+#include <vector> // <-- ADD THIS
 #include "GameObject.h"
 
 namespace zmq
@@ -25,19 +25,7 @@ class NetworkManager
 public:
     NetworkManager();
     ~NetworkManager();
-
-    /**
-     * Starts the server at the listed port.
-     * @param replyPort the port for replying
-     * @param publishPort the port for publishing
-     * @param handshakePort is the port to handle handshakes at from new clients
-     * @param objectList is the server's master list of GameObjects
-     * @param objectMutex is the mutex to protect the server's master list of GameObjects
-     */
-    bool startServer(int replyPort, int publishPort, int handshakePort, 
-                     std::vector<GameObject*>& objectList, std::mutex& objectMutex);
-
-
+    void setClientId(int id) { m_clientId = id; }
     /**
      * Starts the server at the listed port.
      * @param replyPort the port for replying
@@ -47,8 +35,8 @@ public:
      * @param objectList is the server's master list of GameObjects
      * @param objectMutex is the mutex to protect the server's master list of GameObjects
      */
-    bool startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout, 
-                     std::vector<GameObject*>& objectList, std::mutex& objectMutex);
+    bool startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout,
+                     std::vector<GameObject *> &objectList, std::mutex &objectMutex);
     /**
      * Starts the client and connects to the server address at the port given.
      * -- Run this after connectAndHandshake to generate a unique requestPort using the returned id
@@ -57,7 +45,8 @@ public:
      * @param subscribePort the port for subscribes
      * @return whether or not the client was successfully started
      */
-    bool startClient(const std::string &serverAddress, int requestPort, int subscribePort);
+    bool startClient(const std::string &serverAddress, int requestPort, int subscribePort,
+                     std::vector<GameObject *> &objectList, std::mutex &objectMutex);
 
     /**
      * Closes connections, contexts, and threads.
@@ -85,7 +74,7 @@ public:
      * Connects to the server and performs a handshake to get a client ID.
      * @return The unique client ID assigned by the server, or -1 on failure.
      */
-    int connectAndHandshake(const std::string &serverAddress, int handshakePort);
+    int connectAndHandshake(const std::string &serverAddress, int handshakePort, int &replyPort);
     // void handleHandshakes();
 
     /**
@@ -106,19 +95,19 @@ private:
 
     // Struct to help handle and keep track of each client
     struct ClientConnection
-
     {
         int id;
         std::thread thread;
+        std::atomic<bool> running{true};
     };
 
     std::map<int, ClientConnection> m_clients;
     std::mutex m_clientsMutex;
-    //std::mutex m_gameStateMut;
+    // std::mutex m_gameStateMut;
     std::map<int, PlayerState> m_playerStates;
     std::mutex m_playerStatesMutex;
-    std::vector<GameObject*>* m_masterObjectList;
-    std::mutex* m_objectListMutex;
+    std::vector<GameObject *> *m_masterObjectList;
+    std::mutex *m_objectListMutex;
     Role m_role;
 
     // The server's threads
@@ -151,6 +140,7 @@ private:
     GameState m_gameState;
     std::mutex m_gameStateMut;
     int m_startReplyPort;
+    int m_clientId = -1;
     std::atomic<int> m_nextClientId{0};
 
     /**
@@ -169,5 +159,4 @@ private:
         @param portNum is the port number to be connected at
      */
     void readClient(int id, int portNum);
-
 };
