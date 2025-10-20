@@ -34,6 +34,7 @@ target_compile_definitions(client PRIVATE IS_CLIENT)
 add_executable(server
     ./src/engine/components/server.cpp
     ./src/engine/components/network.cpp
+    ./src/engine/components/timeline.cpp
 )
 
 add_executable(p2p_server

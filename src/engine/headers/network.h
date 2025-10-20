@@ -78,11 +78,14 @@ public:
      * @return The unique client ID assigned by the server, or -1 on failure.
      */
     int connectAndHandshake(const std::string &serverAddress, int handshakePort);
+    // void handleHandshakes();
 
     /**
      * Gets the latest game state information
      */
     std::optional<GameState> getLatestGameState();
+
+    void updateNpcState(const NPCState &npcState);
 
 private:
     // Enum to track whether we are a server, a client, or uninitialized.
@@ -95,6 +98,7 @@ private:
 
     // Struct to help handle and keep track of each client
     struct ClientConnection
+
     {
         int id;
         std::thread thread;
@@ -156,4 +160,5 @@ private:
         @param portNum is the port number to be connected at
      */
     void readClient(int id, int portNum);
+
 };

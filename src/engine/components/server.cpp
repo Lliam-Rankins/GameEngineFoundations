@@ -1,16 +1,18 @@
 #include <iostream>
-#include <thread>   // Required for std::this_thread::sleep_for
-#include <chrono>   // Required for std::chrono::milliseconds
+#include <thread> // Required for std::this_thread::sleep_for
+#include <chrono> // Required for std::chrono::milliseconds
 
-#include "../headers/network.h" // Include your NetworkManager
+#include "../headers/network.h"
+#include "../headers/timeline.h"
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[])
+{
     std::cout << "Starting server..." << std::endl;
 
     NetworkManager serverManager;
 
     // Use the same ports you configured in the client
-    const int REPLY_PORT = 5555;
+    const int REPLY_PORT = 6000;
     const int PUBLISH_PORT = 5556;
     const int HANDSHAKE_PORT = 5557;
 
@@ -19,16 +21,28 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::cout << "Server started successfully. Waiting for clients..." << std::endl;
+    Timeline serverTimeline;
+    // Let's create a server-side representation of the police car
+    NPCState policeCarState = {0, 860.0f, 590.0f}; // objectId 0, initial position
+    float policeCarVelocityX = 150.0f;
 
-    // This is the main server loop. It runs forever.
+    // The main server loop now runs the simulation.
     while (true) {
-        // The update function handles receiving client states and broadcasting the world state.
-        serverManager.update();
+        serverTimeline.update();
+        float dt = serverTimeline.getDeltaTime();
 
-        // Prevent the server from using 100% CPU.
-        // A 16ms sleep gives us a "tick rate" of about 60 updates per second.
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        // 1. Simulate the NPC on the server
+        int leftBound = 860 - 100;
+        int rightBound = 860 + 100;
+        if (policeCarState.x > rightBound || policeCarState.x < leftBound) {
+            policeCarVelocityX *= -1.0f;
+        }
+        policeCarState.x += policeCarVelocityX * dt;
+
+        // 2. Safely update the shared GameState for all threads to see
+        serverManager.updateNpcState(policeCarState);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60 ticks per second
     }
 
     // In this simple server, the loop never ends.

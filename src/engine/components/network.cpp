@@ -223,7 +223,6 @@ void NetworkManager::update()
     // If a new GameState was successfully received, update client's GameState
     if (result.has_value() && result.value() > 0)
     {
-        // --- DESERIALIZATION LOGIC (No change needed here) ---
         GameState newState;
         const char *buffer = gameStateMessage.data<const char>();
 
@@ -247,6 +246,7 @@ void NetworkManager::update()
             m_gameState = std::move(newState);
             m_hasReceivedFirstState = true;
         }
+
     }
 }
 
@@ -407,5 +407,13 @@ void NetworkManager::readClient(int id, int portNum)
             m_playerStates[id] = clientState;
         }
         clientRep.send(zmq::buffer(""));
+    }
+}
+
+void NetworkManager::updateNpcState(const NPCState& npcState) {
+    std::lock_guard<std::mutex> lock(m_gameStateMut);
+    // Find the right NPC in the array (assuming ID is the index) and update it
+    if (npcState.objectId >= 0 && npcState.objectId < MAX_NPCS) {
+        m_gameState.npcs[npcState.objectId] = npcState;
     }
 }
