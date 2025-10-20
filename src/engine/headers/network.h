@@ -9,6 +9,8 @@
 #include "protocol.h"
 #include <thread>
 #include <mutex>
+#include <map>
+#include <atomic>
 
 namespace zmq
 {
@@ -29,6 +31,15 @@ public:
      * @param handshakePort is the port to handle handshakes at from new clients
      */
     bool startServer(int replyPort, int publishPort, int handshakePort);
+
+    /**
+     * Starts the server at the listed port.
+     * @param replyPort the port for replying
+     * @param publishPort the port for publishing
+     * @param handshakePort is the port to handle handshakes at from new clients
+     * @param clientTimeout is ticks needed to consider a client 'disconected'
+     */
+    bool startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout);
 
     /**
      * Starts the client and connects to the server address at the port given.
@@ -67,7 +78,6 @@ public:
      * @return The unique client ID assigned by the server, or -1 on failure.
      */
     int connectAndHandshake(const std::string &serverAddress, int handshakePort);
-
     // void handleHandshakes();
 
     /**
@@ -86,17 +96,20 @@ private:
         CLIENT
     };
 
-    // Struc to help handle and keep track of each client
-    struct Client
+    // Struct to help handle and keep track of each client
+    struct ClientConnection
+
     {
         int id;
-        int portNum;
         std::thread thread;
     };
 
-    Client m_clientArr[MAX_PLAYERS];
-    std::mutex m_gameStateMut;
-
+    std::map<int, ClientConnection> m_clients;
+    std::mutex m_clientsMutex;
+    //std::mutex m_gameStateMut;
+    std::map<int, PlayerState> m_playerStates;
+    std::mutex m_playerStatesMutex;
+    
     Role m_role;
 
     // The server's threads
@@ -117,13 +130,19 @@ private:
     // Boolean value to ensure that whatever needed to happen goes well before proceeding (starting server, etc)
     bool m_isInitialized;
 
-    bool m_running;
+    // Integer value for tick count without receiving client information to consider them timedout
+    int m_clientTimeout;
+
+    std::atomic<bool> m_running{false};
 
     // A flag for if we have received the first game state
     bool m_hasReceivedFirstState;
 
     // A complete game state object
     GameState m_gameState;
+    std::mutex m_gameStateMut;
+    int m_startReplyPort;
+    std::atomic<int> m_nextClientId{0};
 
     /**
         Thread function ran by one server thread to continuously check for and handle handshakes from new clients.
