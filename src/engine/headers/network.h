@@ -11,6 +11,7 @@
 #include <mutex>
 #include <map>
 #include <atomic>
+#include <chrono>
 #include <vector> // <-- ADD THIS
 #include "GameObject.h"
 
@@ -99,6 +100,8 @@ private:
         int id;
         std::thread thread;
         std::atomic<bool> running{true};
+        // Time point of last 'no message' log to avoid flooding the logs
+        std::chrono::steady_clock::time_point lastNoMessageLog{std::chrono::steady_clock::now()};
     };
 
     std::map<int, ClientConnection> m_clients;

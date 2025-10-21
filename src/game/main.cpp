@@ -1,6 +1,6 @@
 /*
 	This is the new main file for the client, rebuilt from scratch
-	to use the GameObject and Component model. 	Some of the content in this file was generated with Gemini 2.5 Pro.
+	to use the GameObject and Component model. Some of the content in this file was edited with AI tools.
 	This citation is to abide by the syllabus requirement that "appropriate citations"
 	must be given when referring to external sources. More information is available upon request.
 */
@@ -23,37 +23,32 @@
 
 SDL_Renderer *renderer = nullptr;
 SDL_Window *window = nullptr;
+
+// We now pass pointers to the object list and mutex so this thread can find the player
 void client_network_thread(bool *running, NetworkManager *netManager, std::vector<GameObject *> *objectList, std::mutex *objectMutex, int clientId)
 {
 	Timeline networkTimeline;
-	// An accumulator to track time passed since the last network send.
 	float timeSinceLastSend = 0.0f;
 
 	while (*running)
 	{
-		// 1. Update the timeline to calculate the delta time for this loop iteration.
 		networkTimeline.update();
 		float dt = networkTimeline.getDeltaTime();
-
-		// 2. Add the delta time to our accumulator.
 		timeSinceLastSend += dt;
 
-		// 3. Check if enough time has passed to send the next update.
 		if (timeSinceLastSend >= 0.033f)
-		{ // 0.033s is roughly 30 times per second
-			// Reset the accumulator.
+		{
 			timeSinceLastSend = 0.0f;
 
-			// Look up the local player under the object list mutex so we can
-			// detect the GameObject created later by the network handshake.
 			GameObject *localPlayer = nullptr;
 			{
+				// We must lock the mutex to safely search the list
 				std::lock_guard<std::mutex> lock(*objectMutex);
 				localPlayer = findGameObjectByClientId(clientId, *objectList);
 			}
+
 			if (localPlayer)
 			{
-				// Send our local player's state to the server.
 				PlayerState myState;
 				myState.clientId = clientId;
 				Vector pos = localPlayer->getComponent<Vector>("position");
@@ -61,22 +56,17 @@ void client_network_thread(bool *running, NetworkManager *netManager, std::vecto
 				myState.y = pos.y;
 				try
 				{
-					std::cout << "[Network] client_network_thread sending PlayerState x=" << myState.x << " y=" << myState.y << std::endl;
 					netManager->sendPlayerState(myState);
 				}
 				catch (const std::exception &e)
 				{
-					// It's common for the first few sends to fail before the
-					// connection is fully established. We just log it and continue.
 					std::cerr << "Network send failed (might be connecting): " << e.what() << std::endl;
 				}
 			}
 		}
 
-		// 4. Receive the latest world state from the server (this is non-blocking).
+		// This is the ONLY place update() is called.
 		netManager->update();
-
-		// Give the CPU a tiny break to prevent this thread from running at 100%.
 		std::this_thread::sleep_for(std::chrono::milliseconds(5));
 	}
 }
@@ -86,12 +76,13 @@ int main(int argc, char *argv[])
 	initializeSDL();
 	createWindowAndRenderer(&window, &renderer);
 
-	// Load all textures once at the start
 	SDL_Texture *playerTexture = IMG_LoadTexture(renderer, "media/warped city files/Assets/SPRITES/player/idle/idle-1.png");
 	SDL_Texture *platformTexture = IMG_LoadTexture(renderer, "media/warped city files/Assets/ENVIRONMENT/props/control-box-3.png");
 	SDL_Texture *policeTexture = IMG_LoadTexture(renderer, "media/warped city files/Assets/SPRITES/vehicles/v-police.png");
+	SDL_Texture *platform2Texture = IMG_LoadTexture(renderer, "media/warped city files/Assets/ENVIRONMENT/props/control-box-1.png");
+	SDL_Texture *hotelSignTexture = IMG_LoadTexture(renderer, "media/warped city files/Assets/ENVIRONMENT/props/hotel-sign.png");
 
-	if (!playerTexture || !platformTexture || !policeTexture)
+	if (!playerTexture || !platformTexture || !policeTexture || !platform2Texture)
 	{
 		SDL_Log("Could not load one or more textures: %s", SDL_GetError());
 		return 1;
@@ -112,17 +103,8 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	std::cout << "Connected with Client ID: " << myClientId << std::endl;
-	std::cout << "Server Reply Port is: " << myRequestPort << std::endl;
-
-	// We now pass the port we received from the server to startClient.
-	networkManager.startClient("localhost", myRequestPort, SUBSCRIBE_PORT,
-							   clientObjectList, clientObjectListMutex);
+	networkManager.startClient("localhost", myRequestPort, SUBSCRIBE_PORT, clientObjectList, clientObjectListMutex);
 	networkManager.setClientId(myClientId);
-
-	// Create a local static platform once so the client has something to collide with.
-	// This mirrors the server's static platform and prevents the player from falling through
-	// if static objects are not broadcast to clients.
 	{
 		GameObject *platform = new GameObject();
 		platform->setComponent("is_platform", true);
@@ -131,100 +113,101 @@ int main(int argc, char *argv[])
 		platform->setComponent("dimensions", Vector(62.0f, 30.0f));
 		platform->setComponent("texture", platformTexture);
 		clientObjectList.push_back(platform);
+
+		GameObject *platform2 = new GameObject();
+		platform2->setComponent("is_platform", true);
+		platform2->setComponent("object_id", -2);
+		platform2->setComponent("position", Vector(1920 / 2.0f + 300.0f, 1080 / 2.0f + 150.0f));
+		platform2->setComponent("dimensions", Vector(32.0f, 30.0f));
+		platform2->setComponent("texture", platform2Texture);
+		clientObjectList.push_back(platform2);
+
 	}
-	// --- END CONNECTION FIX ---
-
 	GameObject *localPlayer = nullptr;
-
 	Timeline mainTimeline;
 	bool running = true;
 	SDL_Event event;
 
-	std::cout << "Starting network thread..." << std::endl;
+	// We now pass the object list and mutex to the network thread
 	std::thread networkThread(client_network_thread, &running, &networkManager, &clientObjectList, &clientObjectListMutex, myClientId);
 
 	while (running)
 	{
 		mainTimeline.update();
 		float dt = mainTimeline.getDeltaTime();
-		const float MAX_DELTA_TIME = 1.0f / 20.0f; // Clamp delta time
-		if (dt > MAX_DELTA_TIME)
-			dt = MAX_DELTA_TIME;
 		if (dt <= 0)
 			continue;
+
+		// frame start
 
 		while (SDL_PollEvent(&event))
 		{
 			if (event.type == SDL_EVENT_QUIT)
-			{
 				running = false;
-			}
 		}
 		if (isKeyPressed(SDL_SCANCODE_ESCAPE))
-		{
 			running = false;
-		}
 
-		// Lock the mutex for the entire game logic update.
-		// This prevents the network thread from changing data while we use it.
 		std::lock_guard<std::mutex> lock(clientObjectListMutex);
+
+		// --- Link to Local Player ---
 		if (!localPlayer)
 		{
 			localPlayer = findGameObjectByClientId(myClientId, clientObjectList);
-			if (localPlayer)
-			{
-				std::cout << "Local player object found!" << std::endl;
-			}
 		}
 
+		// --- Input System ---
 		if (localPlayer)
 		{
 			Vector currentVel = localPlayer->getComponent<Vector>("velocity");
-			currentVel.x = 0; // Reset horizontal velocity each frame
-
+			currentVel.x = 0;
 			if (isKeyPressed(SDL_SCANCODE_A))
 				currentVel.x = -300.0f;
 			if (isKeyPressed(SDL_SCANCODE_D))
 				currentVel.x = 300.0f;
 			if (isKeyPressed(SDL_SCANCODE_SPACE))
-			{
-				// This is a simplified jump. A real game would check if the player is grounded.
 				currentVel.y = -300.0f;
-			}
 			localPlayer->setComponent("velocity", currentVel);
 		}
 
-		// NOTE: Sending of PlayerState is handled by the dedicated network thread
-		// (client_network_thread). Removing the duplicate send here prevents
-		// multiple threads from using the same REQ socket and causing EFSM
-		// errors like "Operation cannot be accomplished in current state".
-
-		// This system loops through ALL objects and applies physics.
+		// --- Physics & Interpolation System ---
 		for (auto &obj : clientObjectList)
 		{
-			if (obj->hasComponent("velocity") && obj->hasComponent("position"))
+			if (obj->hasComponent("position"))
 			{
-				Vector vel = obj->getComponent<Vector>("velocity");
-				Vector pos = obj->getComponent<Vector>("position");
-
-				// Apply gravity only to players for now
-				if (obj->hasComponent("is_player"))
+				if (obj == localPlayer)
 				{
+					// Apply physics directly to our own player for responsiveness
+					Vector vel = obj->getComponent<Vector>("velocity");
+					Vector pos = obj->getComponent<Vector>("position");
 					vel.y += WorldPhysics::getGravity() * dt;
+					pos.x += vel.x * dt;
+					pos.y += vel.y * dt;
+					obj->setComponent("position", pos);
+					obj->setComponent("velocity", vel);
 				}
-
-				// Update position based on velocity
-				pos.x += vel.x * dt;
-				pos.y += vel.y * dt;
-
-				obj->setComponent("position", pos);
-				obj->setComponent("velocity", vel);
+				else if (obj->hasComponent("is_npc") && obj->hasComponent("net_position"))
+				{
+					// For NPCs, smoothly interpolate towards their network target using
+					// time-correct exponential smoothing. This adapts smoothing to the
+					// client's frame delta so motion stays smooth even if dt varies.
+					Vector pos = obj->getComponent<Vector>("position");
+					Vector netPos = obj->getComponent<Vector>("net_position");
+					// Smoothing time constant (seconds). ~0.1 gives ~100ms response.
+					const float tau = 0.1f;
+					float alpha = 1.0f - std::exp(-dt / tau);
+					// Clamp alpha to a sensible range
+					if (alpha < 0.0f)
+						alpha = 0.0f;
+					if (alpha > 1.0f)
+						alpha = 1.0f;
+					pos.x = pos.x + (netPos.x - pos.x) * alpha;
+					pos.y = pos.y + (netPos.y - pos.y) * alpha;
+					obj->setComponent("position", pos);
+				}
 			}
 		}
 
-		// --- Simple collision resolution between players and platforms ---
-		// This is a minimal AABB resolver: if the bottom of a player intersects
-		// the top of a platform, snap the player to the platform top and zero Y velocity.
 		for (auto &playerObj : clientObjectList)
 		{
 			if (!playerObj->hasComponent("is_player") || !playerObj->hasComponent("position") || !playerObj->hasComponent("dimensions") || !playerObj->hasComponent("velocity"))
@@ -260,94 +243,46 @@ int main(int argc, char *argv[])
 					pvel.y = 0.0f;
 					playerObj->setComponent("position", ppos);
 					playerObj->setComponent("velocity", pvel);
-					std::cout << "[Collision] Snapped player to platform: pbottom=" << pbottom << " ptop=" << ptop << " horiz=" << horizOverlap << " vel.y=" << pvel.y << std::endl;
 				}
 				else
 				{
 					// Only log when player is far below the platform to avoid spam
 					if (ppos.y > 600)
 					{
-						std::cout << "[Collision] No snap: player y=" << ppos.y << " bottom=" << pbottom << " platform top=" << ptop << " horiz=" << horizOverlap << " vel.y=" << pvel.y << std::endl;
+						// std::cout << "[Collision] No snap: player y=" << ppos.y << " bottom=" << pbottom << " platform top=" << ptop << " horiz=" << horizOverlap << " vel.y=" << pvel.y << std::endl;
 					}
 				}
 			}
 		}
 
-		// --- NPC interpolation: smoothly move NPCs toward the last received network target ---
-		for (auto &obj : clientObjectList)
-		{
-			if (!obj->hasComponent("is_npc") || !obj->hasComponent("position") || !obj->hasComponent("net_position"))
-				continue;
-
-			Vector pos = obj->getComponent<Vector>("position");
-			Vector net = obj->getComponent<Vector>("net_position");
-			// Simple linear interpolation
-			float alpha = 0.15f; // smoothing factor
-			pos.x = pos.x + (net.x - pos.x) * alpha;
-			pos.y = pos.y + (net.y - pos.y) * alpha;
-			obj->setComponent("position", pos);
-			// Debug log for big jumps
-			if (fabs(net.x - pos.x) > 50.0f || fabs(net.y - pos.y) > 50.0f)
-			{
-				std::cout << "[Interp] NPC " << obj->getComponent<int>("npc_id") << " large delta to net (" << net.x - pos.x << "," << net.y - pos.y << ")" << std::endl;
-			}
-		}
-
-		// --- Collision System (Simplified) ---
-		// A real collision system would be more complex.
-		// This is just to demonstrate platform interaction.
-		// ... (Collision logic would go here, looping through objects) ...
-
 		// --- Render System ---
 		setupScreen(renderer);
-
 		for (auto &obj : clientObjectList)
 		{
-			// --- Step 1: Assign textures to new objects that don't have one ---
-			// This part only runs once per new object.
 			if (!obj->hasComponent("texture"))
 			{
 				if (obj->hasComponent("is_player"))
-				{
 					obj->setComponent("texture", playerTexture);
-				}
 				else if (obj->hasComponent("is_npc"))
-				{
-					// You can get more specific here later, e.g., "npc_type" == "police"
 					obj->setComponent("texture", policeTexture);
-				}
 				else if (obj->hasComponent("is_platform"))
-				{
 					obj->setComponent("texture", platformTexture);
-				}
-				// If it's none of the above, it remains texture-less and won't be rendered.
+				else if (obj->hasComponent("is_hotel"))
+					obj->setComponent("texture", hotelSignTexture);
 			}
-
-			// --- Step 2: Render all objects that are renderable ---
-			// Now that we've assigned textures, this is the only logic we need.
-			// It's much simpler and has no repeated code.
 			if (obj->hasComponent("texture") && obj->hasComponent("position") && obj->hasComponent("dimensions"))
 			{
 				SDL_Texture *tex = obj->getComponent<SDL_Texture *>("texture");
 				Vector pos = obj->getComponent<Vector>("position");
 				Vector dim = obj->getComponent<Vector>("dimensions");
-
-				SDL_FRect destRect;
-				destRect.x = pos.x - dim.x / 2.0f;
-				destRect.y = pos.y - dim.y / 2.0f;
-				destRect.w = dim.x;
-				destRect.h = dim.y;
-
+				SDL_FRect destRect = {pos.x - dim.x / 2.0f, pos.y - dim.y / 2.0f, dim.x, dim.y};
 				SDL_RenderTexture(renderer, tex, NULL, &destRect);
 			}
 		}
 		refreshScreen(renderer);
-		std::this_thread::sleep_for(std::chrono::milliseconds(16));
 	}
 
-	std::cout << "Main loop ended. Joining network thread..." << std::endl;
-	// The `running` flag being false will signal the network thread to stop its loop.
-	// .join() will then wait for it to finish cleanly.
+	running = false;
 	networkThread.join();
 	networkManager.cleanUp();
 
@@ -355,6 +290,7 @@ int main(int argc, char *argv[])
 	SDL_DestroyTexture(playerTexture);
 	SDL_DestroyTexture(platformTexture);
 	SDL_DestroyTexture(policeTexture);
+	SDL_DestroyTexture(platform2Texture);
 
 	// Clean up GameObjects
 	for (auto &obj : clientObjectList)

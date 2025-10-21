@@ -4,4 +4,4 @@
 #include "../headers/physics.h"
 #include <pthread.h>
 
-std::atomic<int> WorldPhysics::gravityWeight = 100;
+std::atomic<int> WorldPhysics::gravityWeight = 1000;

@@ -1,0 +1,7 @@
+[Network] Sent handshake to localhost:5557
+[Network] Handshake assigned clientId=6 replyPort=6006
+[Network] Client connected subscribe:tcp://localhost:5556 request:tcp://localhost:6006
+[Network] client recv rate:51 msgs/sec, avg_oneway_ms=5.82353 samples=51, avg_interarrival_ms=19.8 missed=0
+[Network] client recv rate:46 msgs/sec, avg_oneway_ms=5.23913 samples=46, avg_interarrival_ms=21.413 missed=0
+[Network] client recv rate:53 msgs/sec, avg_oneway_ms=5.30189 samples=53, avg_interarrival_ms=18.8113 missed=0
+[Network] client recv rate:31 msgs/sec, avg_oneway_ms=6.35484 samples=31, avg_interarrival_ms=31.9032 missed=0
