@@ -74,9 +74,12 @@ bool NetworkManager::startServer(int startReplyPort, int publishPort, int handsh
     m_handshakeSocket->bind("tcp://*:" + std::to_string(handshakePort));
 
     // Increase send high-water mark so brief subscriber stalls don't block us
-    try {
+    try
+    {
         m_publishSocket->set(zmq::sockopt::sndhwm, 1000);
-    } catch (const zmq::error_t &e) {
+    }
+    catch (const zmq::error_t &e)
+    {
         std::cerr << "[Network] Warning: failed to set sndhwm: " << e.what() << std::endl;
     }
 
@@ -165,13 +168,13 @@ void NetworkManager::sendPlayerState(const PlayerState &state)
             std::cerr << "[Network] Warning: sendPlayerState send() returned false" << std::endl;
         }
 
-            // 2. Wait for the simple "OK" confirmation to complete the REQ/REP cycle.
-            zmq::message_t confirmation;
-            auto result = m_requestSocket->recv(confirmation);
-            if (!result)
-            {
-                std::cerr << "[Network] Warning: Failed to receive server confirmation." << std::endl;
-            }
+        // 2. Wait for the simple "OK" confirmation to complete the REQ/REP cycle.
+        zmq::message_t confirmation;
+        auto result = m_requestSocket->recv(confirmation);
+        if (!result)
+        {
+            std::cerr << "[Network] Warning: Failed to receive server confirmation." << std::endl;
+        }
     }
 }
 
@@ -235,9 +238,6 @@ GameObject *findAvailableSpawnPoint(std::vector<GameObject *> &objectList)
 
 void NetworkManager::update()
 {
-    // Drain any available messages so we never block here. Keep the last message
-    // received in this call and process that. This avoids blocking recv and
-    // reduces missed-update gaps when the network thread is preempted.
     zmq::message_t gameStateMessage;
     bool gotAny = false;
     static auto lastUpdateTime = std::chrono::steady_clock::now();
@@ -304,7 +304,8 @@ void NetworkManager::update()
 
     // Compute one-way latency estimate (requires clocks to be approximately synced)
     auto client_recv_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                                std::chrono::system_clock::now().time_since_epoch())
+                                .count();
     long long latency_ms = (long long)client_recv_time - (long long)server_ts_ms;
 
     size_t num_players;
@@ -341,33 +342,12 @@ void NetworkManager::update()
             missed = (int)(delta - (uint32_t)drained_count);
             missed_in_window += missed;
         }
-        // inter-arrival: time between this receival and previous processed one
-        auto inter_ms = duration; // duration between receives in ms
-        interarrival_total_ms += inter_ms;
-        interarrival_samples++;
     }
     last_seq = seq;
     have_last_seq = true;
 
     auto now_stats = std::chrono::steady_clock::now();
     auto recv_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now_stats - recv_stats_start).count();
-    if (recv_elapsed >= 1000)
-    {
-        double avg_latency = latency_samples > 0 ? (double)latency_total_ms / latency_samples : 0.0;
-        double avg_inter_ms = interarrival_samples > 0 ? (double)interarrival_total_ms / interarrival_samples : 0.0;
-        // std::cout << "[Network] client recv rate:" << recv_count << " msgs/sec" \
-                //   << ", avg_oneway_ms=" << avg_latency << " samples=" << latency_samples \
-                  << ", avg_interarrival_ms=" << avg_inter_ms << " missed=" << missed_in_window << std::endl;
-        recv_count = 0;
-        recv_stats_start = now_stats;
-        latency_total_ms = 0;
-        latency_samples = 0;
-        interarrival_total_ms = 0;
-        interarrival_samples = 0;
-        missed_in_window = 0;
-    }
-
-    
 
     if (!m_masterObjectList || !m_objectListMutex)
         return;
@@ -403,8 +383,6 @@ void NetworkManager::update()
             // This is a remote player that already exists. Update their position.
             obj->setComponent("position", Vector(playerState.x, playerState.y));
         }
-        // If it's our own local player (obj exists and ID matches), we do nothing.
-        // This lets our local physics be the authority for our own movement.
     }
 
     // --- Process NPCs ---
@@ -486,7 +464,6 @@ void NetworkManager::handleHandshakes()
 
         int newClientId = m_nextClientId++;
 
-        // --- BRIDGE LOGIC: CREATE GAMEOBJECT FOR NEW PLAYER ---
         {
             // Lock the master list before adding a new object
             std::lock_guard<std::mutex> lock(*m_objectListMutex);
@@ -519,34 +496,18 @@ void NetworkManager::handleHandshakes()
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
 
-            // 1. Use try_emplace. This is the key change.
-            // It finds the key `newClientId`. If it doesn't exist, it constructs
-            // a ClientConnection object IN-PLACE using its default constructor.
-            // This avoids any illegal move or copy operations.
             auto result = m_clients.try_emplace(newClientId);
 
-            // 2. Get a reference to the object that is now safely inside the map.
-            // result.first is an iterator to the map element. ->second gets the value.
             ClientConnection &newConnectionInMap = result.first->second;
 
-            // 3. Now, populate the members of the object that's already in its final destination.
             newConnectionInMap.id = newClientId;
-            // The 'running' flag is already true by default from the struct definition.
 
-            // 4. Create the thread and move-assign it into the struct's thread member.
-            // This is legal because std::thread is movable.
             newConnectionInMap.thread = std::thread(&NetworkManager::readClient, this, newClientId, newClientPort);
             std::cout << "[Network] Spawned readClient thread for client " << newClientId << std::endl;
         }
-        // --- END FIX ---
 
-        // The rest of the function proceeds as before...
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-        // 2. We now PAUSE the handshake thread for a brief moment.
-        // This gives the OS time to schedule the new readClient thread and
-        // for that thread to successfully bind its REP socket to the new port.
-        // This is the critical synchronization step that prevents the race condition.
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         PlayerState response;
@@ -662,7 +623,6 @@ void NetworkManager::messageLooper()
     {
         GameState state_to_send;
 
-        // --- BRIDGE LOGIC: BUILD PACKET FROM GAMEOBJECTS ---
         {
             std::lock_guard<std::mutex> lock(*m_objectListMutex);
 
@@ -694,19 +654,14 @@ void NetworkManager::messageLooper()
                     n.y = pos.y;
                     npc_idx++;
                 }
-                // Platforms and other static objects can also be sent this way
-                // if you add them to your GameState struct.
             }
             state_to_send.num_clients = state_to_send.players.size();
         }
-        // --- END BRIDGE LOGIC ---
 
-        // --- SERIALIZATION (Unchanged) ---
-            const size_t num_players = state_to_send.players.size();
-            const size_t players_data_size = num_players * sizeof(PlayerState);
-            const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
-            // include 8-byte server timestamp at the start
-            const size_t total_size = sizeof(uint64_t) + sizeof(size_t) + players_data_size + npc_data_size;
+        const size_t num_players = state_to_send.players.size();
+        const size_t players_data_size = num_players * sizeof(PlayerState);
+        const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
+        const size_t total_size = sizeof(uint64_t) + sizeof(size_t) + players_data_size + npc_data_size;
 
         if (reuse_buf.size() < total_size)
             reuse_buf.resize(total_size);
@@ -714,7 +669,8 @@ void NetworkManager::messageLooper()
 
         // Write server timestamp first (ms since epoch)
         uint64_t server_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
+                                    std::chrono::system_clock::now().time_since_epoch())
+                                    .count();
         memcpy(buffer, &server_ts_ms, sizeof(uint64_t));
         buffer += sizeof(uint64_t);
 
@@ -735,56 +691,28 @@ void NetworkManager::messageLooper()
 
         bool send_ok = false;
         auto send_start = std::chrono::steady_clock::now();
-        try {
+        try
+        {
             // Use non-blocking send so publisher isn't stalled by slow subscribers
             auto sent = m_publishSocket->send(zmq::buffer(reuse_buf.data(), total_size), zmq::send_flags::dontwait);
             send_ok = static_cast<bool>(sent);
-        } catch (const zmq::error_t &e) {
-            if (e.num() == EAGAIN) {
+        }
+        catch (const zmq::error_t &e)
+        {
+            if (e.num() == EAGAIN)
+            {
                 send_ok = false;
-            } else {
+            }
+            else
+            {
                 std::cerr << "[Network] publish send threw zmq::error_t: " << e.what() << " (num=" << e.num() << ")" << std::endl;
                 send_ok = false;
             }
-        } catch (const std::exception &e) {
+        }
+        catch (const std::exception &e)
+        {
             std::cerr << "[Network] publish send threw exception: " << e.what() << std::endl;
             send_ok = false;
-        }
-        auto send_end = std::chrono::steady_clock::now();
-        auto send_us = std::chrono::duration_cast<std::chrono::microseconds>(send_end - send_start).count();
-
-        static int published_count = 0;
-        static int dropped_count = 0;
-        static long long total_send_us = 0;
-        static auto stats_start = std::chrono::steady_clock::now();
-
-        if (send_ok)
-        {
-            published_count++;
-            total_send_us += send_us;
-            // Only log very slow sends to avoid console overhead
-            if (send_us > 1000) {
-                auto now = std::chrono::steady_clock::now();
-                auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-                std::cout << "[Network] slow publish (" << send_us << "us) at " << now_ms << " ms" << std::endl;
-            }
-        }
-        else
-        {
-            dropped_count++;
-        }
-
-        // Every second, print a short summary of publishes + drops
-        auto now_stats = std::chrono::steady_clock::now();
-        auto stats_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now_stats - stats_start).count();
-        if (stats_elapsed >= 1000)
-        {
-            double avg_send_us = published_count > 0 ? (double)total_send_us / published_count : 0.0;
-            // reset
-            published_count = 0;
-            dropped_count = 0;
-            total_send_us = 0;
-            stats_start = now_stats;
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
