@@ -46,22 +46,20 @@ int main(int argc, char *argv[])
     serverMasterObjectList.push_back(policeCar);
 
     GameObject *hotelSign = new GameObject();
-    hotelSign->setComponent("is_hotel", true);
+    hotelSign->setComponent("is_npc", true);
     hotelSign->setComponent("npc_id", 1);
     hotelSign->setComponent("position", Vector(1920 / 2.0f - 400.0f, 1080 / 2.0f - 100.0f));
     hotelSign->setComponent("dimensions", Vector(68.0f, 35.0f));
     hotelSign->setComponent("velocity", Vector(0.0f, 100.0f));
     serverMasterObjectList.push_back(hotelSign);
 
-    GameObject *spawnPoint1 = new GameObject();
-    spawnPoint1->setComponent("is_spawnpoint", true);
-    spawnPoint1->setComponent("position", Vector(1920 / 2.0f, 1080 / 2.0f - 100.0f));
-    serverMasterObjectList.push_back(spawnPoint1);
-
-    GameObject *spawnPoint2 = new GameObject();
-    spawnPoint2->setComponent("is_spawnpoint", true);
-    spawnPoint2->setComponent("position", Vector(200.0f, 200.0f));
-    serverMasterObjectList.push_back(spawnPoint2);
+    GameObject *droneNpc = new GameObject();
+    droneNpc->setComponent("is_npc", true);
+    droneNpc->setComponent("npc_id", 2);
+    droneNpc->setComponent("position", Vector(2100.0f, 1080 / 2.0f - 200.0f));
+    droneNpc->setComponent("dimensions", Vector(30.0f, 15.0f));
+    droneNpc->setComponent("velocity", Vector(50.0f, 0.0f));
+    serverMasterObjectList.push_back(droneNpc);
 
     NetworkManager serverManager;
     const int REPLY_PORT = 6000;
@@ -77,12 +75,11 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // 4. ==================== SIMULATION LOOP ====================
     Timeline serverTimeline;
     std::cout << "Server started. Running simulation..." << std::endl;
 
     // Use steady sleep_until to maintain a steady tick rate and reduce jitter.
-    const std::chrono::milliseconds TICK_MS(16); // ~60Hz
+    const std::chrono::milliseconds TICK_MS(16);
     auto next_tick = std::chrono::steady_clock::now() + TICK_MS;
     while (true)
     {
@@ -98,7 +95,6 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        // --- Physics / AI System ---
         // Lock only for the duration of state updates so network threads
         // (messageLooper) can access the object list while the server sleeps.
         {
@@ -151,6 +147,29 @@ int main(int argc, char *argv[])
                         vel.y *= -1.0f;
                     }
                     pos.y = nextY;
+                    obj->setComponent("position", pos);
+                    obj->setComponent("velocity", vel);
+                }
+                if (obj->hasComponent("is_npc") && obj->getComponent<int>("npc_id") == 2)
+                {
+                    Vector pos = obj->getComponent<Vector>("position");
+                    Vector vel = obj->getComponent<Vector>("velocity");
+                    const float leftBound = 2100.0f - 100.0f;
+                    const float rightBound = 2100.0f + 100.0f;
+                    float nextX = pos.x + vel.x * dt;
+                    if (nextX > rightBound)
+                    {
+                        float overflow = nextX - rightBound;
+                        nextX = rightBound - overflow;
+                        vel.x = -std::fabs(vel.x);
+                    }
+                    else if (nextX < leftBound)
+                    {
+                        float overflow = leftBound - nextX;
+                        nextX = leftBound + overflow;
+                        vel.x = std::fabs(vel.x);
+                    }
+                    pos.x = nextX;
                     obj->setComponent("position", pos);
                     obj->setComponent("velocity", vel);
                 }

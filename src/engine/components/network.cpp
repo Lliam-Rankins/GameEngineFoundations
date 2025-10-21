@@ -287,11 +287,6 @@ void NetworkManager::update()
     // Increment recv_count by 1 for the latest message (we could also count
     // the number drained, but that would bias msgs/sec upward in bursts).
     recv_count++;
-    if (duration > 100)
-    {
-        // Log rare large gaps immediately for debugging
-        std::cout << "[Network] Large gap since last update: " << duration << " ms" << std::endl;
-    }
 
     // Parse the latest incoming message (server timestamp + payload)
     GameState newState;
@@ -643,12 +638,6 @@ void NetworkManager::readClient(int id, int portNum)
         local_recv_count++;
         auto now_local_stats = std::chrono::steady_clock::now();
         auto local_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now_local_stats - local_recv_start).count();
-        if (local_elapsed >= 1000)
-        {
-            std::cout << "[Network] readClient(" << id << ") recv rate: " << local_recv_count << " msgs/sec; last_y=" << clientState.y << std::endl;
-            local_recv_count = 0;
-            local_recv_start = now_local_stats;
-        }
 
         {
             std::lock_guard<std::mutex> lock(*m_objectListMutex);

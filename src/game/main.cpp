@@ -24,6 +24,13 @@
 SDL_Renderer *renderer = nullptr;
 SDL_Window *window = nullptr;
 
+const float SCREEN_W = 1920.0f;
+const float SCREEN_H = 1080.0f;
+
+// Replace with your actual world extents:
+const float WORLD_WIDTH = 10000.0f;
+const float WORLD_HEIGHT = 8000.0f;
+
 // We now pass pointers to the object list and mutex so this thread can find the player
 void client_network_thread(bool *running, NetworkManager *netManager, std::vector<GameObject *> *objectList, std::mutex *objectMutex, int clientId)
 {
@@ -41,6 +48,7 @@ void client_network_thread(bool *running, NetworkManager *netManager, std::vecto
 			timeSinceLastSend = 0.0f;
 
 			GameObject *localPlayer = nullptr;
+
 			{
 				// We must lock the mutex to safely search the list
 				std::lock_guard<std::mutex> lock(*objectMutex);
@@ -81,6 +89,8 @@ int main(int argc, char *argv[])
 	SDL_Texture *policeTexture = IMG_LoadTexture(renderer, "media/warped city files/Assets/SPRITES/vehicles/v-police.png");
 	SDL_Texture *platform2Texture = IMG_LoadTexture(renderer, "media/warped city files/Assets/ENVIRONMENT/props/control-box-1.png");
 	SDL_Texture *hotelSignTexture = IMG_LoadTexture(renderer, "media/warped city files/Assets/ENVIRONMENT/props/hotel-sign.png");
+	SDL_Texture *turretTexture = IMG_LoadTexture(renderer, "media/warped city files/Assets/SPRITES/misc/turret/turret-1.png");
+	SDL_Texture *droneTexture = IMG_LoadTexture(renderer, "media/warped city files/Assets/SPRITES/misc/drone/drone-1.png");
 
 	if (!playerTexture || !platformTexture || !policeTexture || !platform2Texture)
 	{
@@ -122,10 +132,62 @@ int main(int argc, char *argv[])
 		platform2->setComponent("texture", platform2Texture);
 		clientObjectList.push_back(platform2);
 
+		GameObject *turret = new GameObject();
+		turret->setComponent("is_platform", true);
+		turret->setComponent("object_id", -3);
+		turret->setComponent("position", Vector(2100.0f, 1080 / 2.0f));
+		turret->setComponent("dimensions", Vector(25.0f, 23.0f));
+		turret->setComponent("texture", turretTexture);
+		clientObjectList.push_back(turret);
+
+		GameObject *drone = new GameObject();
+		drone->setComponent("is_npc", true);
+		drone->setComponent("npc_id", 2);
+		drone->setComponent("position", Vector(2100.0f, 1080 / 2.0f - 200.0f));
+		drone->setComponent("dimensions", Vector(55.0f, 52.0f));
+		drone->setComponent("texture", droneTexture);
+		clientObjectList.push_back(drone);
+
+		// Spawn Point 1 (Above platform 1)
+		GameObject *spawnPoint1 = new GameObject();
+		spawnPoint1->setComponent("is_spawnpoint", true);
+		spawnPoint1->setComponent("spawn_id", 1);
+		spawnPoint1->setComponent("position", Vector(1920 / 2.0f, 1080 / 2.0f - 50.0f)); // (960, 490)
+		clientObjectList.push_back(spawnPoint1);
+
+		// Spawn Point 2 (Above platform 2)
+		GameObject *spawnPoint2 = new GameObject();
+		spawnPoint2->setComponent("is_spawnpoint", true);
+		spawnPoint2->setComponent("spawn_id", 2);
+		// Positioned slightly above platform 2
+		spawnPoint2->setComponent("position", Vector(1920 / 2.0f + 300.0f, 1080 / 2.0f + 150.0f - 50.0f)); // (1260, 640)
+		clientObjectList.push_back(spawnPoint2);
+
+		// Death Zone 1 (Gap between P1 and P2)
+		GameObject *deathZone1 = new GameObject();
+		deathZone1->setComponent("is_deathzone", true);
+		deathZone1->setComponent("spawn_id", 1);
+		deathZone1->setComponent("position", Vector(1117.5f, 800.0f));
+		deathZone1->setComponent("dimensions", Vector(100.0f, 400.0f));
+		clientObjectList.push_back(deathZone1);
+
+		// Death Zone 2 (Gap between P2 and Turret)
+		GameObject *deathZone2 = new GameObject();
+		deathZone2->setComponent("is_deathzone", true);
+		deathZone2->setComponent("spawn_id", 2);
+		deathZone2->setComponent("position", Vector(1681.75f, 800.0f));
+		deathZone2->setComponent("dimensions", Vector(400.5f, 400.0f));
+		clientObjectList.push_back(deathZone2);
 	}
+
 	GameObject *localPlayer = nullptr;
+	// It is a camera whoa
+	GameObject *cameraObject = new GameObject();
+	cameraObject->setComponent("position", Vector(0.0f, 0.0f));
+
 	Timeline mainTimeline;
 	bool running = true;
+	bool cameraInitialized = false;
 	SDL_Event event;
 
 	// We now pass the object list and mutex to the network thread
@@ -156,6 +218,14 @@ int main(int argc, char *argv[])
 			localPlayer = findGameObjectByClientId(myClientId, clientObjectList);
 		}
 
+		if (localPlayer && !cameraInitialized)
+		{
+			Vector ppos = localPlayer->getComponent<Vector>("position");
+			Vector initialCam = Vector(ppos.x - SCREEN_W / 2.0f, ppos.y - SCREEN_H / 2.0f);
+			cameraObject->setComponent("position", initialCam);
+			cameraInitialized = true;
+		}
+
 		// --- Input System ---
 		if (localPlayer)
 		{
@@ -168,6 +238,29 @@ int main(int argc, char *argv[])
 			if (isKeyPressed(SDL_SCANCODE_SPACE))
 				currentVel.y = -300.0f;
 			localPlayer->setComponent("velocity", currentVel);
+		}
+
+		if (localPlayer)
+		{
+			Vector cameraPos = cameraObject->getComponent<Vector>("position");
+			Vector playerPos = localPlayer->getComponent<Vector>("position");
+
+			float xDifference = playerPos.x - cameraPos.x - (SCREEN_W / 2.0f);
+			cameraPos.x += xDifference * 0.05f;
+
+			float yDifference = playerPos.y - cameraPos.y - (SCREEN_H / 2.0f);
+			cameraPos.y += yDifference * 0.05f;
+
+			if (cameraPos.x < 0.0f)
+				cameraPos.x = 0.0f;
+			if (cameraPos.y < 0.0f)
+				cameraPos.y = 0.0f;
+			if (cameraPos.x > WORLD_WIDTH - SCREEN_W)
+				cameraPos.x = WORLD_WIDTH - SCREEN_W;
+			if (cameraPos.y > WORLD_HEIGHT - SCREEN_H)
+				cameraPos.y = WORLD_HEIGHT - SCREEN_H;
+
+			cameraObject->setComponent("position", cameraPos);
 		}
 
 		// --- Physics & Interpolation System ---
@@ -235,7 +328,14 @@ int main(int argc, char *argv[])
 
 				// Check horizontal overlap and vertical intersection
 				bool horizOverlap = (pright > pleftPlat && pleft < prightPlat);
-				bool vertIntersect = (pbottom >= ptop && pvel.y >= 0);
+				float prev_pbottom = (ppos.y - pvel.y * dt) + pdim.y / 2.0f;
+
+				bool movingDown = (pvel.y > 0);
+				bool wasAbove = (prev_pbottom <= ptop);
+				bool isNowOnOrBelow = (pbottom >= ptop);
+
+				// Vertical intersection check
+				bool vertIntersect = (movingDown && wasAbove && isNowOnOrBelow);
 				if (horizOverlap && vertIntersect)
 				{
 					// Snap player to platform top
@@ -244,39 +344,99 @@ int main(int argc, char *argv[])
 					playerObj->setComponent("position", ppos);
 					playerObj->setComponent("velocity", pvel);
 				}
-				else
+			}
+		}
+
+		if (localPlayer)
+		{
+			// Get player's location
+			Vector ppos = localPlayer->getComponent<Vector>("position");
+			Vector pdim = localPlayer->getComponent<Vector>("dimensions");
+			float pleft = ppos.x - pdim.x / 2.0f;
+			float pright = ppos.x + pdim.x / 2.0f;
+			float ptop = ppos.y - pdim.y / 2.0f;
+			float pbottom = ppos.y + pdim.y / 2.0f;
+
+			for (auto &dzObj : clientObjectList)
+			{
+				if (dzObj->hasComponent("is_deathzone") && dzObj->hasComponent("position") && dzObj->hasComponent("dimensions"))
 				{
-					// Only log when player is far below the platform to avoid spam
-					if (ppos.y > 600)
+					// Get death zone's area
+					Vector dzPos = dzObj->getComponent<Vector>("position");
+					Vector dzDim = dzObj->getComponent<Vector>("dimensions");
+					float dzleft = dzPos.x - dzDim.x / 2.0f;
+					float dzright = dzPos.x + dzDim.x / 2.0f;
+					float dztop = dzPos.y - dzDim.y / 2.0f;
+					float dzbottom = dzPos.y + dzDim.y / 2.0f;
+
+					// Collision check
+					bool collision = (pright > dzleft && pleft < dzright && pbottom > dztop && ptop < dzbottom);
+
+					if (collision)
 					{
-						// std::cout << "[Collision] No snap: player y=" << ppos.y << " bottom=" << pbottom << " platform top=" << ptop << " horiz=" << horizOverlap << " vel.y=" << pvel.y << std::endl;
+						// Collision detected! Find the linked spawn point
+						int targetSpawnId = dzObj->getComponent<int>("spawn_id");
+						Vector respawnPos;
+						bool spawnFound = false;
+
+						for (auto &spObj : clientObjectList)
+						{
+							if (spObj->hasComponent("is_spawnpoint") && spObj->getComponent<int>("spawn_id") == targetSpawnId)
+							{
+								respawnPos = spObj->getComponent<Vector>("position");
+								spawnFound = true;
+								break;
+							}
+						}
+
+						if (spawnFound)
+						{
+							// Teleport player and reset velocity
+							localPlayer->setComponent("position", respawnPos);
+							localPlayer->setComponent("velocity", Vector(0.0f, 0.0f));
+						}
+
+						// Stop checking for other death zones now
+						break;
 					}
 				}
 			}
 		}
 
-		// --- Render System ---
+		// Rendering
 		setupScreen(renderer);
-		for (auto &obj : clientObjectList)
 		{
-			if (!obj->hasComponent("texture"))
+			Vector cameraPos = cameraObject->getComponent<Vector>("position");
+			for (auto &obj : clientObjectList)
 			{
-				if (obj->hasComponent("is_player"))
-					obj->setComponent("texture", playerTexture);
-				else if (obj->hasComponent("is_npc"))
-					obj->setComponent("texture", policeTexture);
-				else if (obj->hasComponent("is_platform"))
-					obj->setComponent("texture", platformTexture);
-				else if (obj->hasComponent("is_hotel"))
-					obj->setComponent("texture", hotelSignTexture);
-			}
-			if (obj->hasComponent("texture") && obj->hasComponent("position") && obj->hasComponent("dimensions"))
-			{
-				SDL_Texture *tex = obj->getComponent<SDL_Texture *>("texture");
-				Vector pos = obj->getComponent<Vector>("position");
-				Vector dim = obj->getComponent<Vector>("dimensions");
-				SDL_FRect destRect = {pos.x - dim.x / 2.0f, pos.y - dim.y / 2.0f, dim.x, dim.y};
-				SDL_RenderTexture(renderer, tex, NULL, &destRect);
+				if (!obj->hasComponent("texture"))
+				{
+					if (obj->hasComponent("is_player"))
+						obj->setComponent("texture", playerTexture);
+					else if (obj->hasComponent("is_npc"))
+					{
+						if (obj->getComponent<int>("npc_id") == 0)
+							obj->setComponent("texture", policeTexture);
+						else if (obj->getComponent<int>("npc_id") == 1)
+							obj->setComponent("texture", hotelSignTexture);
+						else if (obj->getComponent<int>("npc_id") == 2)
+							obj->setComponent("texture", droneTexture);
+					}
+					else if (obj->hasComponent("is_platform"))
+						obj->setComponent("texture", platformTexture);
+				}
+				if (obj->hasComponent("texture") && obj->hasComponent("position") && obj->hasComponent("dimensions"))
+				{
+					SDL_Texture *tex = obj->getComponent<SDL_Texture *>("texture");
+					Vector pos = obj->getComponent<Vector>("position");
+					Vector dim = obj->getComponent<Vector>("dimensions");
+
+					float screenX = pos.x - cameraPos.x - (dim.x / 2.0f);
+					float screenY = pos.y - cameraPos.y - (dim.y / 2.0f);
+
+					SDL_FRect destRect = {screenX, screenY, dim.x, dim.y};
+					SDL_RenderTexture(renderer, tex, NULL, &destRect);
+				}
 			}
 		}
 		refreshScreen(renderer);
