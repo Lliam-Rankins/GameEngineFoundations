@@ -6,7 +6,8 @@
 #include "../headers/protocol.h"
 #include <zmq.hpp>
 #include <iostream>
-
+#include <set>
+#include <algorithm>
 /**
  * Default constructor.
  */
@@ -25,8 +26,10 @@ NetworkManager::~NetworkManager()
  * @param replyPort the reply port #
  * @param publishPort the publish port #
  */
-bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort)
+bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout)
 {
+    // Assign client timeout value
+    m_clientTimeout = clientTimeout;
 
     // Create the context and store it in the member variable
     m_context = std::make_unique<zmq::context_t>(1);
@@ -34,24 +37,11 @@ bool NetworkManager::startServer(int startReplyPort, int publishPort, int handsh
     // Create the sockets and store them in the member variables
     m_publishSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::pub);
     m_handshakeSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::rep);
+    m_startReplyPort = startReplyPort;
 
     // Bind em
     m_publishSocket->bind("tcp://*:" + std::to_string(publishPort));
     m_handshakeSocket->bind("tcp://*:" + std::to_string(handshakePort));
-
-    // Loop through each index in m_clientArr and give them an id, port number,  and specific thread
-    for(int i = 0; i < MAX_PLAYERS; i++) {
-        int clientPortNum = startReplyPort + i;
-
-        m_clientArr[i].id = i;
-        m_clientArr[i].portNum = clientPortNum;
-        m_clientArr[i].thread = std::thread(&NetworkManager::readClient, this, i, clientPortNum);
-    }
-
-    // Initialize thread to handle incoming client messages
-    m_updateThread = std::thread(&NetworkManager::messageLooper, this);
-    // Initialize thread to handle incoming client handshakes
-    m_handshakeThread = std::thread(&NetworkManager::handleHandshakes, this);
 
     // Set role to server, isInitialized is true and running is true
     m_role = Role::SERVER;
@@ -60,7 +50,21 @@ bool NetworkManager::startServer(int startReplyPort, int publishPort, int handsh
 
     m_running = true;
 
+    // Initialize thread to handle incoming client messages
+    m_updateThread = std::thread(&NetworkManager::messageLooper, this);
+    // Initialize thread to handle incoming client handshakes
+    m_handshakeThread = std::thread(&NetworkManager::handleHandshakes, this);
+
     return true;
+}
+
+/**
+ * Starts the server.
+ * @param replyPort the reply port #
+ * @param publishPort the publish port #
+ */
+bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort) {
+    return NetworkManager::startServer(startReplyPort, publishPort, handshakePort, 50);
 }
 
 /**
@@ -84,16 +88,16 @@ bool NetworkManager::startClient(const std::string &serverAddress, int requestPo
     std::string requestAddress = "tcp://" + serverAddress + ":" + std::to_string(requestPort);
     std::string subscribeAddress = "tcp://" + serverAddress + ":" + std::to_string(subscribePort);
 
+    m_role = Role::CLIENT;
+    m_isInitialized = true;
+    m_running = true;
+
     // Connect
     m_subscribeSocket->connect(subscribeAddress);
     m_requestSocket->connect(requestAddress);
 
     // Set the subscribe pattern to listen for any subscription updates
     m_subscribeSocket->set(zmq::sockopt::subscribe, "");
-
-    m_role = Role::CLIENT;
-    m_isInitialized = true;
-    m_running = true;
 
     return true;
 }
@@ -137,15 +141,16 @@ void NetworkManager::sendNPCState(const NPCState &state)
 }
 
 // This is used to update m_gameState's NPCs and Players without changing num_clients
-void NetworkManager::setGameState(const GameState& newState) {
+void NetworkManager::setGameState(const GameState &newState)
+{
     {
         std::lock_guard<std::mutex> lock(m_gameStateMut);
         m_gameState = newState;
-
     }
 }
 
-GameState NetworkManager::getGameState() {
+GameState NetworkManager::getGameState()
+{
     std::lock_guard<std::mutex> lock(m_gameStateMut);
     return m_gameState;
 }
@@ -159,7 +164,8 @@ void NetworkManager::updateGameStateNPC(NPCState &npc) {
  * Connects the client and the server together.
  * @return the integer value representing the client ID.
  */
-int NetworkManager::connectAndHandshake(const std::string& serverAddress, int handshakePort) {
+int NetworkManager::connectAndHandshake(const std::string &serverAddress, int handshakePort)
+{
     // Create a temporary context for the handshake
     zmq::context_t tempContext(1);
     zmq::socket_t handshakeSocket(tempContext, zmq::socket_type::req);
@@ -176,7 +182,8 @@ int NetworkManager::connectAndHandshake(const std::string& serverAddress, int ha
 
     // Attempt to get a reply from the handshake
     zmq::message_t reply;
-    if (!handshakeSocket.recv(reply)) {
+    if (!handshakeSocket.recv(reply))
+    {
         return -1;
     }
 
@@ -186,44 +193,80 @@ int NetworkManager::connectAndHandshake(const std::string& serverAddress, int ha
 }
 
 // Thread function run by server thread to handle incoming handshakes
-void NetworkManager::handleHandshakes() {
+void NetworkManager::handleHandshakes()
+{
     // While server is running
-    while(m_running) {
+    while (m_running)
+    {
         // Create a request
         zmq::message_t req;
         // If no message is received, continue looping
-        if(!m_handshakeSocket->recv(req, zmq::recv_flags::dontwait)) {
+        if (!m_handshakeSocket->recv(req, zmq::recv_flags::dontwait))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
-        // Get the connect request from the handshaking client
-        PlayerState request = *req.data<PlayerState>();
-        // Create a response PlayerState
-        PlayerState response;
+        int newClientId = m_nextClientId++;
+        int newClientPort = m_startReplyPort + newClientId;
+        // Lock the mutex and add a new client connection
         {
-            // Lock GameState!
-            std::lock_guard<std::mutex> lock(m_gameStateMut);
-
-            // If there is room for another client, get the current num_clients for an id and then increment num_clients
-            if(m_gameState.num_clients < MAX_PLAYERS) {
-                response.clientId = m_gameState.num_clients++;
-            } else {
-                response.clientId = -1;
-            }
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            ClientConnection newConnection;
+            newConnection.id = newClientId;
+            newConnection.thread = std::thread(&NetworkManager::readClient, this, newClientId, newClientPort);
+            m_clients[newClientId] = std::move(newConnection);
         }
+
+        // Create an initial state for the player in the game world.
+        {
+            std::lock_guard<std::mutex> lock(m_playerStatesMutex);
+            PlayerState initialState;
+            initialState.clientId = newClientId;
+            // Set initial position based on spawn points here...
+            m_playerStates[newClientId] = initialState;
+        }
+
+        std::cout << "New client connected. ID: " << newClientId << ", Port: " << newClientPort << std::endl;
+
+        PlayerState response;
+        response.clientId = newClientId;
         m_handshakeSocket->send(zmq::buffer(&response, sizeof(PlayerState)));
     }
 }
 
 // Called by client to check if there are any new gamestate updates
-void NetworkManager::update() {
+void NetworkManager::update()
+{
     // Create a new GameState message and try too receive it from the server
     zmq::message_t gameStateMessage;
     auto result = m_subscribeSocket->recv(gameStateMessage, zmq::recv_flags::dontwait);
     // If a new GameState was successfully received, update client's GameState
-    if(result.has_value() && result.value() > 0) {
-        std::lock_guard<std::mutex> lock(m_gameStateMut);
-        m_gameState = *gameStateMessage.data<GameState>();
-        m_hasReceivedFirstState = true;
+    if (result.has_value() && result.value() > 0)
+    {
+        // --- DESERIALIZATION LOGIC (No change needed here) ---
+        GameState newState;
+        const char *buffer = gameStateMessage.data<const char>();
+
+        size_t num_players;
+        memcpy(&num_players, buffer, sizeof(int));
+        buffer += sizeof(int);
+
+        if (num_players > 0)
+        {
+            newState.players.resize(num_players);
+            const size_t players_data_size = num_players * sizeof(PlayerState);
+            memcpy(newState.players.data(), buffer, players_data_size);
+            buffer += players_data_size;
+        }
+
+        const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
+        memcpy(&newState.npcs, buffer, npc_data_size);
+
+        {
+            std::lock_guard<std::mutex> lock(m_gameStateMut);
+            m_gameState = std::move(newState);
+            m_hasReceivedFirstState = true;
+        }
     }
 }
 
@@ -250,19 +293,77 @@ std::optional<GameState> NetworkManager::getLatestGameState()
 /**
  * Function called by a server thread to continuously send out new messages to the clients.
  */
-void NetworkManager::messageLooper() {
-    // While the server is running
-    while(m_running) {
-        // Get the current  GameState
-        GameState current;
-        // Lock it all up
+void NetworkManager::messageLooper()
+{
+    while (m_running)
+    {
+        GameState state_to_send;
+
+        // --- BRIDGE LOGIC: BUILD PACKET FROM GAMEOBJECTS ---
         {
-            std::lock_guard<std::mutex> lock(m_gameStateMut);
-            current = m_gameState;
+            std::lock_guard<std::mutex> lock(*m_objectListMutex);
+
+            // Reserve space for efficiency
+            state_to_send.players.reserve(m_clients.size());
+
+            int npc_idx = 0;
+            // Initialize all NPCs to inactive
+            for (int i = 0; i < MAX_NPCS; ++i)
+                state_to_send.npcs[i].objectId = -1;
+
+            for (const auto &obj : *m_masterObjectList)
+            {
+                if (obj->hasComponent("is_player"))
+                {
+                    PlayerState p;
+                    p.clientId = obj->getComponent<int>("client_id");
+                    Vector pos = obj->getComponent<Vector>("position");
+                    p.x = pos.x;
+                    p.y = pos.y;
+                    state_to_send.players.push_back(p);
+                }
+                else if (obj->hasComponent("is_npc") && npc_idx < MAX_NPCS)
+                {
+                    NPCState &n = state_to_send.npcs[npc_idx];
+                    n.objectId = obj->getComponent<int>("npc_id");
+                    Vector pos = obj->getComponent<Vector>("position");
+                    n.x = pos.x;
+                    n.y = pos.y;
+                    npc_idx++;
+                }
+                // Platforms and other static objects can also be sent this way
+                // if you add them to your GameState struct.
+            }
+            state_to_send.num_clients = state_to_send.players.size();
         }
-        // Publish game state to all clients
-        m_publishSocket->send(zmq::buffer(&current, sizeof(GameState)));
-        // Delay maybe?
+        // --- END BRIDGE LOGIC ---
+
+        // --- SERIALIZATION (Unchanged) ---
+        const size_t num_players = state_to_send.players.size();
+        const size_t players_data_size = num_players * sizeof(PlayerState);
+        const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
+        const size_t total_size = sizeof(size_t) + players_data_size + npc_data_size;
+        zmq::message_t message(total_size);
+        char *buffer = message.data<char>();
+
+        memcpy(buffer, &num_players, sizeof(size_t));
+        buffer += sizeof(size_t);
+        if (num_players > 0)
+        {
+            memcpy(buffer, state_to_send.players.data(), players_data_size);
+            buffer += players_data_size;
+        }
+        memcpy(buffer, &state_to_send.npcs, npc_data_size);
+
+        auto sent = m_publishSocket->send(message, zmq::send_flags::none);
+        if (!sent)
+        {
+            std::cerr << "[Network] Warning: publish send failed" << std::endl;
+        }
+        else
+        {
+            std::cout << "[Network] Published GameState (players=" << state_to_send.players.size() << ")" << std::endl;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(32));
     }
 }
@@ -272,69 +373,94 @@ void NetworkManager::messageLooper() {
  */
 void NetworkManager::cleanUp()
 {
-    if (m_isInitialized)
+    if (!m_isInitialized || !m_running)
+        return;
+
+    m_running = false;
+    if (m_handshakeThread.joinable())
+        m_handshakeThread.join();
+    if (m_updateThread.joinable())
+        m_updateThread.join();
+
     {
-        m_running = false;
-
-        // Now we can close the member sockets because they exist
-        if (m_requestSocket)
-            m_requestSocket->close();
-        if (m_subscribeSocket)
-            m_subscribeSocket->close();
-        if (m_publishSocket)
-            m_publishSocket->close();
-        if (m_context)
-            m_context->close();
-
-        // unique_ptr will handle deletion, but resetting them is good practice
-        m_requestSocket.reset();
-        m_subscribeSocket.reset();
-        m_publishSocket.reset();
-        m_context.reset();
-
-        m_isInitialized = false;
-        m_role = Role::NONE;
-
-        // Close all threads
-        for (int i = 0; i < MAX_PLAYERS; ++i) {
-            if (m_clientArr[i].thread.joinable())
-            m_clientArr[i].thread.detach(); 
+        std::lock_guard<std::mutex> lock(m_clientsMutex);
+        for (auto &pair : m_clients)
+        {
+            if (pair.second.thread.joinable())
+            {
+                pair.second.thread.join();
+            }
         }
-
-        if (m_updateThread.joinable()) {
-            m_updateThread.join();
-        }
+        m_clients.clear();
     }
+
+    m_playerStates.clear();
+    // Now we can close the member sockets because they exist
+    m_requestSocket.reset();
+    m_subscribeSocket.reset();
+    m_publishSocket.reset();
+    m_handshakeSocket.reset();
+    if (m_context)
+    {
+        m_context->close();
+        m_context.reset();
+    }
+    m_isInitialized = false;
+    m_role = Role::NONE;
 }
 
 /**
  * Called by server thread, one per client, to continuously read input from the designated client.
  */
-void NetworkManager::readClient(int id, int portNum) {
+void NetworkManager::readClient(int id, int portNum)
+{
     // Create a client reply socket
     zmq::socket_t clientRep(*m_context, zmq::socket_type::rep);
     clientRep.bind("tcp://*:" + std::to_string(portNum));
 
+    // Create time since last update
+    std::chrono::high_resolution_clock::time_point lastTimeRecv;
+    lastTimeRecv = std::chrono::high_resolution_clock::now();
+
     // Continuously loop while the server is running
-    while(m_running) {
+    while (m_running)
+    {
         // Create and try to receive a client message, if none then restart loop
         zmq::message_t message;
-        if(!clientRep.recv(message, zmq::recv_flags::dontwait)) {
+        if (!clientRep.recv(message, zmq::recv_flags::dontwait))
+        {
+            // Check duration of elapsed time
+            std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
+            int elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTimeRecv).count();
+            if (elapsedTime >= m_clientTimeout) {
+                // Timeout Detected, disconect current client
+                {
+                    // Lock Clients and erase this client
+                    std::lock_guard<std::mutex> lock(m_clientsMutex);
+                    m_clients.erase(id);
+                }
+                {
+                    // Lock Player states before erasing
+                    std::lock_guard<std::mutex> lock(m_playerStatesMutex);
+                    m_playerStates.erase(id);
+                }
+
+                // Stop reading client (Break)
+                break;
+            };
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
             continue;
         }
 
+        // Received Message, reset timer;
+        lastTimeRecv = std::chrono::high_resolution_clock::now();
+
         // Decode the message
         PlayerState clientState = *message.data<PlayerState>();
-
-        // Update the GameState accordingly
         {
-            std::lock_guard<std::mutex> lock(m_gameStateMut);
-            m_gameState.players[id] = clientState;
-
-            // If this is a new client, increment client count
-            if (m_gameState.num_clients <= id) {
-                m_gameState.num_clients = id + 1;
-            }
+            std::lock_guard<std::mutex> lock(m_playerStatesMutex);
+            m_playerStates[id] = clientState;
         }
         clientRep.send(zmq::buffer(""));
     }
