@@ -11,6 +11,7 @@
 #include <mutex>
 #include <map>
 #include <atomic>
+#include <chrono>
 #include <vector>
 #include "GameObject.h"
 
@@ -26,24 +27,17 @@ public:
     NetworkManager();
     ~NetworkManager();
     void setClientId(int id) { m_clientId = id; }
-
-    /**
-     * Starts the server at the listed port.
-     * @param replyPort the port for replying
-     * @param publishPort the port for publishing
-     * @param handshakePort is the port to handle handshakes at from new clients
-     */
-    bool startServer(int replyPort, int publishPort, int handshakePort);
-
     /**
      * Starts the server at the listed port.
      * @param replyPort the port for replying
      * @param publishPort the port for publishing
      * @param handshakePort is the port to handle handshakes at from new clients
      * @param clientTimeout is ticks needed to consider a client 'disconected'
+     * @param objectList is the server's master list of GameObjects
+     * @param objectMutex is the mutex to protect the server's master list of GameObjects
      */
-    bool startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout);
-
+    bool startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout,
+                     std::vector<GameObject *> &objectList, std::mutex &objectMutex);
     /**
      * Starts the client and connects to the server address at the port given.
      * -- Run this after connectAndHandshake to generate a unique requestPort using the returned id
@@ -52,7 +46,8 @@ public:
      * @param subscribePort the port for subscribes
      * @return whether or not the client was successfully started
      */
-    bool startClient(const std::string &serverAddress, int requestPort, int subscribePort);
+    bool startClient(const std::string &serverAddress, int requestPort, int subscribePort,
+                     std::vector<GameObject *> &objectList, std::mutex &objectMutex);
 
     /**
      * Closes connections, contexts, and threads.
@@ -87,12 +82,15 @@ public:
      * Connects to the server and performs a handshake to get a client ID.
      * @return The unique client ID assigned by the server, or -1 on failure.
      */
-    int connectAndHandshake(const std::string &serverAddress, int handshakePort);
+    int connectAndHandshake(const std::string &serverAddress, int handshakePort, int &replyPort);
+    // void handleHandshakes();
 
     /**
      * Gets the latest game state information
      */
     std::optional<GameState> getLatestGameState();
+
+    void updateNpcState(const NPCState &npcState);
 
 private:
     // Enum to track whether we are a server, a client, or uninitialized.
@@ -108,18 +106,20 @@ private:
     {
         int id;
         std::thread thread;
+        std::atomic<bool> running{true};
+        // Time point of last 'no message' log to avoid flooding the logs
+        std::chrono::steady_clock::time_point lastNoMessageLog{std::chrono::steady_clock::now()};
     };
 
     std::map<int, ClientConnection> m_clients;
     std::mutex m_clientsMutex;
+    // std::mutex m_gameStateMut;
     std::map<int, PlayerState> m_playerStates;
     std::mutex m_playerStatesMutex;
     std::vector<GameObject *> m_masterObjectList;
     std::mutex m_objectListMutex;
     Role m_role;
-    
-    int m_clientId;
-    
+
     // The server's threads
     std::thread m_updateThread;
     std::thread m_handshakeThread;
@@ -150,6 +150,7 @@ private:
     GameState m_gameState;
     std::mutex m_gameStateMut;
     int m_startReplyPort;
+    int m_clientId = -1;
     std::atomic<int> m_nextClientId{0};
 
     /**
