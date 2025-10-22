@@ -23,13 +23,32 @@ SDL_Renderer* renderer = nullptr;
 // Window Variables
 Vector windowSize = {720, 540};
 
-// Starting Positions
-Vector playerPos = {100, 100};
-Vector platformPos_1 = {100, 400};
-Vector movingPlatPos_1 = {500, 600};
 
-// Defaults
-Vector defaultVel = {0, 0};
+///////////////////////////
+//	Defaults
+///////////////////////////
+
+// Player
+Vector player_Position = {100, 100};
+Vector player_Dimensions;
+SDL_Texture* player_Texture;
+Vector player_Velocity = {0, 0};
+
+// Platforms
+Vector platform1_Position = {100, 400};
+Vector platform2_Position = {400, 400};
+Vector platform3_Position = {700, 400};
+
+SDL_Texture* movingPlatform_Texture;
+Vector movingPlatform_Dimensions;;
+
+// Spawn Zones
+Vector spawnZone1_Positon = {100, 100};
+
+// DeathZones
+Vector deathZone1_Position = {100, 400};
+Vector deathZone1_Dimensions = {300, 300};
+
 
 
 // Game Vars
@@ -72,18 +91,47 @@ void texCheck(SDL_Texture* tex) {
 	}
 }
 
-// Render entity
-void renderEntity(GameObject& e) {
-	if (e.hasComponent("Position") && e.hasComponent("Dimensions") && e.hasComponent("tex")) {
-		Vector pos = e.getComponent<Vector>("Position");
-		Vector dim = e.getComponent<Vector>("Dimensions");
-		SDL_Texture* tex = e.getComponent<SDL_Texture *>("tex");
+void renderObj(GameObject *object) {
+	// Logic for adding dimensions and textures to remove players
+	if (object->hasComponent("is_player") && (!object->hasComponent("dimensions") || !object->hasComponent("texture"))) {
+		object->setComponent("dimensions", player_Dimensions);
+		object->setComponent("texture", player_Texture);
+	}
 
-		SDL_FRect rectangle = { pos.x - dim.x, pos.y - dim.y, dim.x, dim.y};
+	// Logic for adding dimensions and textures to npcs
+	if (object->hasComponent("is_npc") && (!object->hasComponent("dimensions") || !object->hasComponent("texture"))) {
+		object->setComponent("dimensions", movingPlatform_Dimensions);
+		object->setComponent("texture", movingPlatform_Texture);
+	}
+
+
+
+	// Only Render Objects with Positions and Dimensions, and a color or texture
+	if (!object->hasComponent("position") || !object->hasComponent("dimensions") || 
+	   (!object->hasComponent("color") && !object->hasComponent("texture"))) {
+			std::cout << "Object lacks something" << std::endl;
+			return;
+		}
+
+	Vector pos = object->getComponent<Vector>("position");
+	Vector dim = object->getComponent<Vector>("dimensions");
+
+	// Create Rectangle to render Obj
+	SDL_FRect rectangle = { pos.x - dim.x, pos.y - dim.y, dim.x, dim.y};
+
+	// Object has Texture
+	if (object->hasComponent("texture")) {
+		std::cout << "Textured Obj" << std::endl;
+		SDL_Texture* tex = object->getComponent<SDL_Texture *>("texture");
 		SDL_RenderTexture(renderer, tex, NULL, &rectangle);
 	}
+	// Object has Color
+	else {
+		std::cout << "Colored Obj" << std::endl;
+		SDL_Color color = object->getComponent<SDL_Color>("color");
+		SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+	}
 }
-
 
 //////////////////////////////////////////////////
 //
@@ -92,109 +140,59 @@ void renderEntity(GameObject& e) {
 //////////////////////////////////////////////////
 
 // Rendering Thread
-void rendering(GameObject *player, GameObject *movingPlat, GameObject *plat, int *myID) {
+void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *player) {
 	// Loop Forever
 	while (true) {
-		// Setup the Screen
+		// // Setup the Screen
 		setupScreen(renderer);
 
+		// Render Local Player
+		// renderObj(player);
+
 		// For all players and NPCs
-		renderEntity(*player);
 		{
-			// Lock
-			std::unique_lock<std::mutex> cv_lock(playersMutex);
-			for (const auto& pair : remotePlayers) {
-				if (pair.first != *myID) renderEntity(*pair.second);
+			// Lock, rendering remote objects
+			std::lock_guard<std::mutex> lock(*objectMutex);
+
+			// Render Each Object
+			for (const auto &object : *objectList) {
+				renderObj(object);
 			}
-
-			renderEntity(*movingPlat);
 		}
-		renderEntity(*plat);
-
 
 		// Wait
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
+
+
+	// Clear screen
+	// SDL_RenderClear(renderer);
+	
+	// refreshScreen(renderer);
 }
 
 // Network Thread
-void networking(NetworkManager *myNetwork, int *myID, GameObject *localPlayer, GameObject *movingPlat) {
+void networking(NetworkManager *myNetwork, std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *localPlayer) {
 	// Loop Forever
 	while (true) {
-		PlayerState myPlayerState;
-
-		Vector pos = localPlayer->getComponent<Vector>("Position");
-		myPlayerState.clientId = *myID;
-		myPlayerState.x = pos.x;
-		myPlayerState.y = pos.y; 
-
-		myNetwork->sendPlayerState(myPlayerState);
+		// Get correct Object List
 		myNetwork->update();
-		
-		auto newGameState = myNetwork->getLatestGameState();
+		std::cout << "Updated" << std::endl;
 
-
-
-		std::cout << "Got Game State" << std::endl;
-
-		// Check to make sure that there is a game state
-		if (!newGameState.has_value()) continue;
-
-		GameState gameState = newGameState.value();
-
-		std::cout << "Non Null Game State" << std::endl;
-
-
-		//Update remotePlayers
 		{
-			// Lock
-			std::unique_lock<std::mutex> cv_lock(playersMutex);
-
-			// For every client
-			// TODO: will need to remove player when i stop receiving their information from server
-			for (int i = 0; i < gameState.num_clients; i++) {
-				// Grab player i
-				PlayerState playerState = gameState.players[i];
-
-				// Not me
-				if (playerState.clientId == *myID) continue;
-
-				Vector remotePlayerPosition = {playerState.x, playerState.y};
-
-				// Otherwise, Update or create new player
-				if (remotePlayers.find(playerState.clientId) == remotePlayers.end()) {	
-					// Make new Player Game Object 
-					remotePlayers[i] = std::make_unique<GameObject>();
-					remotePlayers[i]->setComponent("Position", remotePlayerPosition);
-				}
-				else {
-					if (!isPaused) remotePlayers[i]->setComponent("Position", remotePlayerPosition);
-				}
-			}
+			PlayerState myPlayerState;
+			Vector pos = localPlayer->getComponent<Vector>("position");
+			myPlayerState.clientId = -1;
+			myPlayerState.x = pos.x;
+			myPlayerState.y = pos.y; 
+			myNetwork->sendPlayerState(myPlayerState);
 		}
-
-		std::cout << "Read In Players" << std::endl;
-
-		//Update NPCs
-		{
-			// Lock
-			std::unique_lock<std::mutex> cv_lock(npcMutex);
-
-			NPCState movingPlatformState = gameState.npcs[0];
-			std::cout << movingPlatformState.x << std::endl;
-
-			// Making Sure we arent paused
-			Vector movingPlatformPosition = {movingPlatformState.x, movingPlatformState.y};
-
-			std::cout << "Updating Platform Pos" << std::endl;
-			if (!isPaused) movingPlat->setComponent("Position", movingPlatformPosition);
-		}
-
-		
 
 		// Wait
 		std::this_thread::sleep_for(std::chrono::milliseconds(33));
 	}
+
+	std::cout << "Sent Player state" << std::endl;
 }
 
 void handleMovement() {
@@ -222,37 +220,61 @@ int main(int argc, char* argv[])
 
 
 	//Load Textures
-	playerTex = IMG_LoadTexture(renderer, "../media/darkworld_character_morwen_idle.png");
-	texCheck(playerTex);
+	player_Texture = IMG_LoadTexture(renderer, "../media/darkworld_character_morwen_idle.png");
+	texCheck(player_Texture);
 
-	SDL_Texture* brickTex = IMG_LoadTexture(renderer, "../media/darkworld_platform_brick_idle.png");
-	texCheck(brickTex);
+	movingPlatform_Texture = IMG_LoadTexture(renderer, "../media/darkworld_platform_brick_idle.png");
+	texCheck(movingPlatform_Texture);
 
 	// Create Dimensions
-	Vector playerDim = {playerTex->w, playerTex->h};
-	Vector brickDim = {brickTex->w, brickTex->h};
+	player_Dimensions = {player_Texture->w, player_Texture->h};
+	movingPlatform_Dimensions = {movingPlatform_Texture->w, movingPlatform_Texture->h};
+
+
+	// Instantiate ObjectList
+    std::vector<GameObject *> objectList;
+    std::mutex objectMutex;
 
 	// Entity creation
-	// players[0] = std::make_unique<Entity>(playerPos, playerTex, true);
+	// players[0] = std::make_unique<Entity>(player_Position, playerTex, true);
 	GameObject player = GameObject();
-	player.setComponent("Position", playerPos);
-	player.setComponent("Velocity", defaultVel);
-	player.setComponent("Dimensions", playerDim);
-	player.setComponent("tex", playerTex);
+	player.setComponent("position", player_Position);
+	player.setComponent("is_player", true);
+	player.setComponent("object_id", 0);
+	player.setComponent("velocity", player_Velocity);
+	player.setComponent("dimensions", player_Dimensions);
+	player.setComponent("texture", player_Texture);
 	player.setComponent("physics", true);
 
+	// Platforms
 	GameObject platform_1 = GameObject();
-	platform_1.setComponent("Position", platformPos_1);
-	platform_1.setComponent("Dimensions", brickDim);
-	platform_1.setComponent("tex", brickTex);
-	platform_1.setComponent("physics", false);
+	platform_1.setComponent("position", platform1_Position);
+	platform_1.setComponent("object_id", -1);
+	platform_1.setComponent("dimensions", movingPlatform_Dimensions);
+	platform_1.setComponent("texture", movingPlatform_Texture);
 
-	GameObject movingPlat_1 = GameObject();
-	movingPlat_1.setComponent("Position", movingPlatPos_1);
-	movingPlat_1.setComponent("Velocity", defaultVel);
-	movingPlat_1.setComponent("Dimensions", brickDim);
-	movingPlat_1.setComponent("tex", brickTex);
-	movingPlat_1.setComponent("physics", false);
+	GameObject platform_2 = GameObject();
+	platform_2.setComponent("position", platform2_Position);
+	platform_2.setComponent("object_id", -2);
+	platform_2.setComponent("dimensions", movingPlatform_Dimensions);
+	platform_2.setComponent("texture", movingPlatform_Texture);
+
+	GameObject platform_3 = GameObject();
+	platform_3.setComponent("position", platform3_Position);
+	platform_3.setComponent("object_id", -3);
+	platform_3.setComponent("dimensions", movingPlatform_Dimensions);
+	platform_3.setComponent("texture", movingPlatform_Texture);
+
+	// Spawn Zones
+	GameObject spawnZone_1 = GameObject();
+	platform_3.setComponent("position", platform3_Position);
+	platform_3.setComponent("object_id", -4);
+	// TODO: Change Dimensions
+	platform_3.setComponent("dimensions", movingPlatform_Dimensions);
+
+	objectList.push_back(&platform_1);
+	objectList.push_back(&platform_2);
+	objectList.push_back(&platform_3);
 
 	// Setting Gravity
 	WorldPhysics::setGravity(gravity);
@@ -271,14 +293,15 @@ int main(int argc, char* argv[])
 	const int HANDSHAKE_PORT = 5557;
 	const int REQUEST_BASE_PORT = 5600;
 
-	int myID = myNetwork.connectAndHandshake("localhost", HANDSHAKE_PORT);
+	int REPLY_PORT;
+
+	int myID = myNetwork.connectAndHandshake("localhost", HANDSHAKE_PORT, REPLY_PORT);
 	if (myID == -1) {
 		std::cerr << "Client Failed to be created" << std::endl;
 		exit(1);
 	}
 
-	std::cout << "Client Id: " << myID << std::endl;
-	myNetwork.startClient("localhost", REQUEST_BASE_PORT + myID, SUBSCRIBE_PORT);
+	myNetwork.startClient("localhost", REQUEST_BASE_PORT + myID, SUBSCRIBE_PORT, objectList, objectMutex);
 	
 
 	//////////////////////////////////////////////////
@@ -288,10 +311,13 @@ int main(int argc, char* argv[])
 	//////////////////////////////////////////////////
 
 	// Start Networking Thread
-	std::thread netThread(&networking, &myNetwork, &myID, &player, &movingPlat_1);
+	std::thread netThread(&networking, &myNetwork, &objectList, &objectMutex, &player);
 
 	// Start Rendering Thread
-	std::thread renderThread(&rendering, &player, &movingPlat_1, &platform_1, &myID);
+	std::thread renderThread(&rendering, &objectList, &objectMutex, &player);
+
+	std::cout << "Started multi threading" << myID << std::endl;
+
 
 
 	//////////////////////////////////////////////////
@@ -391,7 +417,10 @@ int main(int argc, char* argv[])
 		// Gameplay Updates
 		//
 		//////////////////////////////////////////////////
-		updatePosition(movingPlat_1, isPaused);
+
+
+
+
 
 		//////////////////////////////////////////////////
 		//
@@ -399,7 +428,7 @@ int main(int argc, char* argv[])
 		//
 		//////////////////////////////////////////////////
 		// Player Movement
-		Vector vel = player.getComponent<Vector>("Velocity");
+		Vector vel = player.getComponent<Vector>("velocity");
 		if (isKeyPressed(SDL_SCANCODE_W) || isKeyPressed(SDL_SCANCODE_SPACE)) {	// Jump
 			vel.y += -playerJumpSpeed * d_time;
 		}
@@ -413,18 +442,31 @@ int main(int argc, char* argv[])
 			vel.x += playerSpeed * d_time;	
 		}
 
-		
-		
-		// Check if player is not coliding with anything
-		if (!overlappingColliders1(player, platform_1) && !overlappingColliders1(player, movingPlat_1)) {
-			vel.y += WorldPhysics::getGravity() * d_time;
+		//////////////////////////////////////////////////
+		//
+		// Collisions
+		//
+		//////////////////////////////////////////////////
+		{
+			// Check if player is not coliding with anything
+			// GameObject *tempMovingPlatform1 = findGameObjectByNpcId(1, objectList);
+			
+			// if (tempMovingPlatform1) {
+			// 	std::cout << "Collisions" << std::endl;
+			// 	if (!overlappingColliders1(player, platform_1) && !overlappingColliders1(player, *tempMovingPlatform1)) {
+			// 		vel.y += WorldPhysics::getGravity() * d_time;
+			// 	}
+			// }	
 		}
+		
+		
 
-		player.setComponent("Velocity", vel);
+		
 
 		// Move player and then reset their velocity
+		player.setComponent("velocity", vel);
 		updatePosition(player, isPaused);
-		player.setComponent("Velocity", defaultVel);
+		player.setComponent("velocity", player_Velocity);
 
 
 
@@ -432,17 +474,12 @@ int main(int argc, char* argv[])
 		//
 		// Rendering
 		//
-		//////////////////////////////////////////////////
+		//////////////////////////////////////////////////			
+		// // Render Local Player
 
-		
-
-			
-
-		// Clear screen
-		//SDL_RenderClear(renderer);
-		
 		refreshScreen(renderer);
-
+		
+		// std::cout << "Refresh, end of loop" << std::endl;
 	}
 
 	SDL_DestroyRenderer(renderer);

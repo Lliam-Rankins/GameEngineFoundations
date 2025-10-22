@@ -144,16 +144,16 @@
 std::mutex entityMutex;
 
 void updatePosition(GameObject &obj, bool isPaused) {
-	if(!(obj.hasComponent("Position") && obj.hasComponent("Velocity"))) {
+	if(!(obj.hasComponent("position") && obj.hasComponent("velocity"))) {
 		std::cout << "Improper object!" << std::endl;
 	}
 	std::unique_lock<std::mutex> cv_lock(entityMutex);
-	Vector currPos = obj.getComponent<Vector>("Position");
-	Vector currVel = obj.getComponent<Vector>("Velocity");
+	Vector currPos = obj.getComponent<Vector>("position");
+	Vector currVel = obj.getComponent<Vector>("velocity");
 
 	Vector newPos = {currPos.x + currVel.x, currPos.y + currVel.y};
 
 	if(!isPaused) {
-		obj.setComponent("Position", newPos);
+		obj.setComponent("position", newPos);
 	}
 }

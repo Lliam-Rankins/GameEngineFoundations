@@ -48,14 +48,14 @@
 bool overlappingColliders1(GameObject& objA, GameObject& objB) {
 
 	Collider a;
-	a.topLeft = objA.getComponent<Vector>("Position");
-	a.bottomRight.x = a.topLeft.x + objA.getComponent<Vector>("Dimensions").x;
+	a.topLeft = objA.getComponent<Vector>("position");
+	a.bottomRight.x = a.topLeft.x + objA.getComponent<Vector>("dimensions").x;
 	a.bottomRight.y = a.topLeft.y + objA.getComponent<Vector>("Dimensions").y;
 
 	Collider b;
-	b.topLeft = objB.getComponent<Vector>("Position");
-	b.bottomRight.x = b.topLeft.x + objB.getComponent<Vector>("Dimensions").x;
-	b.bottomRight.y = b.topLeft.y + objB.getComponent<Vector>("Dimensions").y;
+	b.topLeft = objB.getComponent<Vector>("dosition");
+	b.bottomRight.x = b.topLeft.x + objB.getComponent<Vector>("dimensions").x;
+	b.bottomRight.y = b.topLeft.y + objB.getComponent<Vector>("dimensions").y;
 
 	// Check if x values for a and b overlap at all
 	bool overlappingX = false;

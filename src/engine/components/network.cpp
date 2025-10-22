@@ -6,7 +6,6 @@
 
 #include "../headers/network.h"
 #include "../headers/protocol.h"
-#include "../headers/gameUtils.h"
 #include <zmq.hpp>
 #include <iostream>
 #include <set>
@@ -192,63 +191,6 @@ void NetworkManager::sendNPCState(const NPCState &state)
     }
 }
 
-
-/**
- * AI USE:
- * Using Gemini I explained the structure of the m_masterObject list, nature of the NPC/GameObjects,
- * and asked for a method to update this vector. Adjusted to work as needed.
- */
-/**
- * Updates a specific NPC's state in the master game object list.
- * This function bridges the network NPCState (from server logic) back to 
- * the game engine's master list for synchronization.
- * * @param npc The incoming NPCState struct containing the new position and id.
- */
-void NetworkManager::updateGameStateNPC(NPCState &npc) {
-    // 1. Lock the mutex protecting the master object list
-    // Assuming m_objectListMutex is now a direct member std::mutex
-    std::lock_guard<std::mutex> lock(m_objectListMutex); 
-
-    // 2. Iterate through the master list to find the matching NPC
-    for (const auto& obj : m_masterObjectList) {
-        
-        // Check if the object is an NPC AND has a matching ID
-        if (obj->hasComponent("is_npc")) {
-            
-            // Assuming getComponent<int>("npc_id") retrieves the NPC's unique identifier
-            int object_npc_id = obj->getComponent<int>("npc_id");
-            std::cout << object_npc_id << std::endl;
-
-            if (object_npc_id == npc.objectId) {
-                // 3. Update the components of the located NPC game object
-                                
-                // Assuming setComponent is a method to update object properties
-                obj->setComponent("position", Vector{npc.x, npc.y}); 
-
-                // 4. Optimization: Break once the object is found and updated
-                return;
-            }
-        }
-    }
-
-    // No Entity Found, make new
-    std::unique_ptr<GameObject> newNpcObject = std::make_unique<GameObject>();
-    // 5. Initialize the necessary components from the NPCState struct
-    
-    // Add the tags/identifiers
-    newNpcObject.get()->setComponent("is_npc", true);
-    newNpcObject.get()->setComponent("npc_id", npc.objectId); 
-    
-    // Add the position component
-    newNpcObject.get()->setComponent("position", Vector{npc.x, npc.y});
-
-    
-    // 5. Add the newly created (cloned) object to the master list
-    m_masterObjectList.push_back(std::move(newNpcObject.release()));
-    
-    // std::cout << "[Server] Added new NPC with ID: " << clonedNpc.get()->getComponent<int>("npc_id") << " to master list." << std::endl;
-}
-
 // This is used to update m_gameState's NPCs and Players without changing num_clients
 void NetworkManager::setGameState(const GameState &newState)
 {
@@ -394,12 +336,11 @@ void NetworkManager::update()
         if (!obj)
         {
             // This is a new player (could be us or someone else). Create them.
+
             GameObject *newPlayer = new GameObject();
             newPlayer->setComponent("is_player", true);
             newPlayer->setComponent("client_id", playerState.clientId);
             newPlayer->setComponent("position", Vector(playerState.x, playerState.y));
-            newPlayer->setComponent("velocity", Vector(0.0f, 0.0f));
-            newPlayer->setComponent("dimensions", Vector(71.0f, 67.0f));
             m_masterObjectList->push_back(newPlayer);
         }
         else if (playerState.clientId != m_clientId)
@@ -422,16 +363,13 @@ void NetworkManager::update()
             GameObject *newNpc = new GameObject();
             newNpc->setComponent("is_npc", true);
             newNpc->setComponent("npc_id", npcState.objectId);
-            newNpc->setComponent("position", Vector(npcState.x, npcState.y));
-            // Set the initial network target position
-            newNpc->setComponent("net_position", Vector(npcState.x, npcState.y));
-            newNpc->setComponent("dimensions", Vector(163.0f, 60.0f));
+            newNpc->setComponent("position", Vector{npcState.x, npcState.y});
             m_masterObjectList->push_back(newNpc);
         }
         else
         {
-            // This NPC already exists. Update its network target position for interpolation.
-            obj->setComponent("net_position", Vector(npcState.x, npcState.y));
+            // This NPC already exists. Update its position for interpolation.
+            obj->setComponent("position", Vector(npcState.x, npcState.y));
         }
     }
 
@@ -647,7 +585,7 @@ void NetworkManager::messageLooper()
         GameState state_to_send;
 
         {
-            std::lock_guard<std::mutex> lock(m_objectListMutex);
+            std::lock_guard<std::mutex> lock(*m_objectListMutex);
 
             // Reserve space for efficiency
             state_to_send.players.reserve(m_clients.size());
@@ -657,9 +595,8 @@ void NetworkManager::messageLooper()
             for (int i = 0; i < MAX_NPCS; ++i)
                 state_to_send.npcs[i].objectId = -1;
 
-            for (const auto &obj : m_masterObjectList)
+            for (const auto &obj : *m_masterObjectList)
             {
-                std::cout << obj << std::endl;
                 if (obj->hasComponent("is_player"))
                 {
                     PlayerState p;

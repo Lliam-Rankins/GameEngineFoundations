@@ -38,6 +38,7 @@ target_compile_definitions(client PRIVATE IS_CLIENT)
 add_executable(server
     ./src/game/server.cpp
     ./src/engine/components/network.cpp
+    ./src/engine/components/entities.cpp
     ./src/engine/components/timeline.cpp
     ./src/engine/components/mathEngine.cpp
     ./src/engine/components/GameObject.cpp

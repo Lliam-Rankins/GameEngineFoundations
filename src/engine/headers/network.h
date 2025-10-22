@@ -14,6 +14,7 @@
 #include <chrono>
 #include <vector>
 #include "GameObject.h"
+#include "gameUtils.h"
 
 namespace zmq
 {
@@ -116,8 +117,8 @@ private:
     // std::mutex m_gameStateMut;
     std::map<int, PlayerState> m_playerStates;
     std::mutex m_playerStatesMutex;
-    std::vector<GameObject *> m_masterObjectList;
-    std::mutex m_objectListMutex;
+    std::vector<GameObject *> *m_masterObjectList;
+    std::mutex *m_objectListMutex;
     Role m_role;
 
     // The server's threads
