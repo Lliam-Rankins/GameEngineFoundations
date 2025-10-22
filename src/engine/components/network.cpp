@@ -520,21 +520,24 @@ void NetworkManager::handleHandshakes()
         std::cout << "[Network] Handshake response sent for client " << newClientId << " port=" << newClientPort << std::endl;
     }
 }
+
 void NetworkManager::readClient(int id, int portNum)
 {
     zmq::socket_t clientRep(*m_context, zmq::socket_type::rep);
     clientRep.bind("tcp://*:" + std::to_string(portNum));
     std::cout << "[Network] readClient bound REP socket on port " << portNum << " for client " << id << std::endl;
+    
+    auto lastTimeRecv = std::chrono::steady_clock::now();
 
     while (m_running)
     {
         zmq::message_t message;
-        // Check for a message
         if (clientRep.recv(message, zmq::recv_flags::dontwait))
         {
-            // --- Process the message ---
+            // --- We got a message ---
+            lastTimeRecv = std::chrono::steady_clock::now(); // Reset timeout
+            
             PlayerState clientState = *message.data<PlayerState>();
-
             {
                 std::lock_guard<std::mutex> lock(*m_objectListMutex);
                 GameObject *playerObj = findGameObjectByClientId(id, *m_masterObjectList);
@@ -543,17 +546,47 @@ void NetworkManager::readClient(int id, int portNum)
                     playerObj->setComponent("position", Vector(clientState.x, clientState.y));
                 }
             }
-
-            // Send the simple acknowledgment
             clientRep.send(zmq::buffer(""));
         }
         else
         {
-            // --- No message, just sleep and check m_running again ---
+            // --- No message, check for timeout ---
+            auto now = std::chrono::steady_clock::now();
+            auto elapsedTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTimeRecv).count();
+
+            if (m_clientTimeout > 0 && elapsedTimeMs >= m_clientTimeout)
+            {
+                std::cout << "[Network] Client " << id << " timed out. Disconnecting." << std::endl;
+                
+                // This thread is ONLY responsible for cleaning up its GameObject.
+                // It MUST NOT remove itself from the m_clients map.
+                
+                std::lock_guard<std::mutex> objectLock(*m_objectListMutex);
+
+                // Remove player object
+                m_masterObjectList->erase(
+                    std::remove_if(m_masterObjectList->begin(), m_masterObjectList->end(),
+                        [id](GameObject *obj) {
+                            if (obj->hasComponent("client_id") && obj->getComponent<int>("client_id") == id) {
+                                delete obj; // Free the memory
+                                return true;
+                            }
+                            return false;
+                        }),
+                    m_masterObjectList->end());
+                
+                // DO NOT ERASE FROM M_CLIENTS HERE.
+                // std::lock_guard<std::mutex> clientsLock(m_clientsMutex); // <-- REMOVED
+                // m_clients.erase(id); // <-- REMOVED (THIS WAS THE BUG)
+                
+                break; // Exit the thread loop
+            }
+            
+            // No message, not timed out, just sleep
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
     }
-
+    
     std::cout << "[Network] readClient " << id << " stopping." << std::endl;
 }
 

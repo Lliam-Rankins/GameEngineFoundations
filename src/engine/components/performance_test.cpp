@@ -47,14 +47,26 @@ void spawn_clients(int num_clients)
  * Kills all client processes.
  * This is a 'brute force' way.
  */
-void stop_clients()
-{
+void stop_clients() {
     std::cout << "  Stopping clients..." << std::endl;
-    // For Windows:
-    // system("taskkill /IM client.exe /F");
-    // For Linux/macOS:
-    system("pkill -f client"); // CHANGE 'client' to your client exe name
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    
+    // We will try three different pkill commands to be thorough.
+    // 1. Try to kill by exact executable name
+    int res1 = system("pkill -x client");
+    
+    // 2. Try to kill by the common WSL process name (if it's a .exe)
+    int res2 = system("pkill -f client.exe");
+    
+    // 3. Try the original broad command
+    int res3 = system("pkill -f client");
+
+    // Use -9 (force kill) on any remaining processes
+    system("pkill -9 -f client");
+    system("pkill -9 -x client");
+
+    std::cout << "  Client kill commands sent. Pausing 2s for cleanup." << std::endl;
+    // Give the OS time to kill them all before the next run
+    std::this_thread::sleep_for(std::chrono::seconds(2)); 
 }
 
 int main()

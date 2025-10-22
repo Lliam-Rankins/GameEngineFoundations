@@ -163,6 +163,14 @@ int main(int argc, char *argv[])
 		platform2->setComponent("texture", platform2Texture);
 		clientObjectList.push_back(platform2);
 
+		GameObject *platform3 = new GameObject();
+		platform3->setComponent("is_platform", true);
+		platform3->setComponent("object_id", -4);
+		platform3->setComponent("position", Vector(10.0f, 50.0f));
+		platform3->setComponent("dimensions", Vector(62.0f, 30.0f));
+		platform3->setComponent("texture", platformTexture);
+		clientObjectList.push_back(platform3);
+
 		GameObject *turret = new GameObject();
 		turret->setComponent("is_platform", true);
 		turret->setComponent("object_id", -3);
