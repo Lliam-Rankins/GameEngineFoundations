@@ -85,6 +85,24 @@ public:
 
     void updateNpcState(const NPCState &npcState);
 
+    /**
+     * Called by the test harness to set the networking strategy.
+     */
+    void setNetworkingStrategy(const std::string &strategy);
+
+    /**
+     * Called by the test harness to provide a list of changed objects
+     * for the "DeltaState" strategy.
+     */
+    void publishDeltaState(const std::vector<GameObject *> &changedObjects);
+
+    /**
+     * Called by the test harness to stop all server threads and clean up.
+     */
+    void stopServer();
+
+    int getConnectedClientCount();
+
 private:
     // Enum to track whether we are a server, a client, or uninitialized.
     enum class Role
@@ -144,6 +162,10 @@ private:
     std::mutex m_gameStateMut;
     int m_startReplyPort;
     int m_clientId = -1;
+    std::string m_strategy = "FullState"; 
+    std::mutex m_strategyMutex;
+    std::vector<GameObject*> m_deltaList;
+    std::mutex m_deltaMutex;
     std::atomic<int> m_nextClientId{0};
 
     /**
@@ -162,4 +184,5 @@ private:
         @param portNum is the port number to be connected at
      */
     void readClient(int id, int portNum);
+    
 };

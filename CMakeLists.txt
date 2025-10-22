@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(SDL3 REQUIRED)
 find_package(SDL3_image REQUIRED)
 find_package(cppzmq REQUIRED)
+find_package(Threads REQUIRED)
 
 set(COMMON_SOURCES
     ./src/engine/components/GameObject.cpp
@@ -27,7 +28,11 @@ add_executable(client
     ${CLIENT_ONLY_SOURCES}
 )
 target_compile_definitions(client PRIVATE IS_CLIENT)
-
+add_executable(performance_test
+    ./src/engine/components/performance_test.cpp
+    ./src/engine/components/server_testable.cpp 
+    ${COMMON_SOURCES}
+)
 add_executable(server
     ./src/engine/components/server.cpp
     ${COMMON_SOURCES}
@@ -43,6 +48,6 @@ add_custom_command(
     "${MEDIA_SOURCE_DIR}"
     "${MEDIA_DEST_DIR}"
 )
-
-target_link_libraries(client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
-target_link_libraries(server PRIVATE cppzmq)
+target_link_libraries(client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq Threads::Threads)
+target_link_libraries(server PRIVATE cppzmq Threads::Threads)
+target_link_libraries(performance_test PRIVATE cppzmq Threads::Threads)

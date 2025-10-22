@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <vector>
+#include <string>
 
 /**
  * Default constructor.
@@ -523,95 +525,36 @@ void NetworkManager::readClient(int id, int portNum)
     zmq::socket_t clientRep(*m_context, zmq::socket_type::rep);
     clientRep.bind("tcp://*:" + std::to_string(portNum));
     std::cout << "[Network] readClient bound REP socket on port " << portNum << " for client " << id << std::endl;
-    auto lastTimeRecv = std::chrono::steady_clock::now();
-
-    // Find our own thread object in the clients map to detach on exit
-    std::thread *self_thread = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(m_clientsMutex);
-        if (m_clients.count(id))
-        {
-            self_thread = &m_clients.at(id).thread;
-        }
-    }
 
     while (m_running)
     {
         zmq::message_t message;
-        if (!clientRep.recv(message, zmq::recv_flags::dontwait))
+        // Check for a message
+        if (clientRep.recv(message, zmq::recv_flags::dontwait))
         {
-            // --- TIMEOUT & DISCONNECT LOGIC ---
-            auto now = std::chrono::steady_clock::now();
-            auto elapsedTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTimeRecv).count();
-            // Rate-limit 'no message' logs: only once every 500ms per client
-            bool shouldLog = false;
+            // --- Process the message ---
+            PlayerState clientState = *message.data<PlayerState>();
+
             {
-                std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
-                if (m_clients.count(id))
+                std::lock_guard<std::mutex> lock(*m_objectListMutex);
+                GameObject *playerObj = findGameObjectByClientId(id, *m_masterObjectList);
+                if (playerObj)
                 {
-                    auto &conn = m_clients.at(id);
-                    auto sinceLastLog = std::chrono::duration_cast<std::chrono::milliseconds>(now - conn.lastNoMessageLog).count();
-                    if (sinceLastLog >= 500)
-                    {
-                        shouldLog = true;
-                        conn.lastNoMessageLog = now;
-                    }
+                    playerObj->setComponent("position", Vector(clientState.x, clientState.y));
                 }
             }
-            if (elapsedTimeMs >= m_clientTimeout)
-            {
-                std::cout << "Client " << id << " timed out. Disconnecting." << std::endl;
-                if (self_thread && self_thread->joinable())
-                {
-                    self_thread->detach();
-                }
-                // Lock both lists to safely remove the client
-                std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
-                std::lock_guard<std::mutex> objectLock(*m_objectListMutex);
 
-                m_masterObjectList->erase(
-                    std::remove_if(m_masterObjectList->begin(), m_masterObjectList->end(),
-                                   [id](GameObject *obj)
-                                   {
-                                       if (obj->hasComponent("client_id") && obj->getComponent<int>("client_id") == id)
-                                       {
-                                           delete obj;
-                                           return true;
-                                       }
-                                       return false;
-                                   }),
-                    m_masterObjectList->end());
-
-                m_clients.erase(id);
-
-                break; // Exit the thread
-            }
+            // Send the simple acknowledgment
+            clientRep.send(zmq::buffer(""));
+        }
+        else
+        {
+            // --- No message, just sleep and check m_running again ---
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
-            continue;
         }
-
-        lastTimeRecv = std::chrono::steady_clock::now();
-        PlayerState clientState = *message.data<PlayerState>();
-
-        // Rate-limit per-message logging to once per second to avoid console overhead
-        static int local_recv_count = 0;
-        static auto local_recv_start = std::chrono::steady_clock::now();
-        local_recv_count++;
-        auto now_local_stats = std::chrono::steady_clock::now();
-        auto local_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now_local_stats - local_recv_start).count();
-
-        {
-            std::lock_guard<std::mutex> lock(*m_objectListMutex);
-            GameObject *playerObj = findGameObjectByClientId(id, *m_masterObjectList);
-            if (playerObj)
-            {
-                playerObj->setComponent("position", Vector(clientState.x, clientState.y));
-            }
-        }
-
-        // Send the simple acknowledgment but avoid logging it per message
-        clientRep.send(zmq::buffer(""));
     }
+
+    std::cout << "[Network] readClient " << id << " stopping." << std::endl;
 }
 
 void NetworkManager::messageLooper()
@@ -619,141 +562,311 @@ void NetworkManager::messageLooper()
     // Reusable serialization buffer to avoid per-tick allocations.
     std::vector<char> reuse_buf;
 
+    // Shared sequence number for all publish packets
+    static uint32_t publish_seq = 0;
+
     while (m_running)
     {
-        GameState state_to_send;
-
+        std::string currentStrategy;
         {
-            std::lock_guard<std::mutex> lock(*m_objectListMutex);
+            // Safely check the current strategy
+            std::lock_guard<std::mutex> lock(m_strategyMutex);
+            currentStrategy = m_strategy;
+        }
 
-            // Reserve space for efficiency
-            state_to_send.players.reserve(m_clients.size());
+        // =================================================================
+        // --- STRATEGY 1: "FullState" (Your original code) ---
+        // (Sends ALL players and ALL NPCs)
+        // =================================================================
+        if (currentStrategy == "FullState")
+        {
+            GameState state_to_send;
 
-            int npc_idx = 0;
-            // Initialize all NPCs to inactive
-            for (int i = 0; i < MAX_NPCS; ++i)
-                state_to_send.npcs[i].objectId = -1;
-
-            for (const auto &obj : *m_masterObjectList)
             {
-                if (obj->hasComponent("is_player"))
+                std::lock_guard<std::mutex> lock(*m_objectListMutex);
+
+                // Reserve space for efficiency
+                state_to_send.players.reserve(m_clients.size());
+
+                int npc_idx = 0;
+                // Initialize all NPCs to inactive
+                for (int i = 0; i < MAX_NPCS; ++i)
+                    state_to_send.npcs[i].objectId = -1;
+
+                // --- This iterates the *ENTIRE* master list ---
+                for (const auto &obj : *m_masterObjectList)
                 {
-                    PlayerState p;
-                    p.clientId = obj->getComponent<int>("client_id");
-                    Vector pos = obj->getComponent<Vector>("position");
-                    p.x = pos.x;
-                    p.y = pos.y;
-                    state_to_send.players.push_back(p);
+                    if (obj->hasComponent("is_player"))
+                    {
+                        PlayerState p;
+                        p.clientId = obj->getComponent<int>("client_id");
+                        Vector pos = obj->getComponent<Vector>("position");
+                        p.x = pos.x;
+                        p.y = pos.y;
+                        state_to_send.players.push_back(p);
+                    }
+                    else if (obj->hasComponent("is_npc") && npc_idx < MAX_NPCS)
+                    {
+                        NPCState &n = state_to_send.npcs[npc_idx];
+                        n.objectId = obj->getComponent<int>("npc_id");
+                        Vector pos = obj->getComponent<Vector>("position");
+                        n.x = pos.x;
+                        n.y = pos.y;
+                        npc_idx++;
+                    }
                 }
-                else if (obj->hasComponent("is_npc") && npc_idx < MAX_NPCS)
+                state_to_send.num_clients = state_to_send.players.size();
+            }
+
+            const size_t num_players = state_to_send.players.size();
+            const size_t players_data_size = num_players * sizeof(PlayerState);
+            const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
+            // Full state packet size:
+            const size_t total_size = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(size_t) + players_data_size + npc_data_size;
+
+            if (reuse_buf.size() < total_size)
+                reuse_buf.resize(total_size);
+            char *buffer = reuse_buf.data();
+
+            // Write server timestamp
+            uint64_t server_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                        std::chrono::system_clock::now().time_since_epoch())
+                                        .count();
+            memcpy(buffer, &server_ts_ms, sizeof(uint64_t));
+            buffer += sizeof(uint64_t);
+
+            // Write sequence number
+            uint32_t seq = publish_seq++;
+            memcpy(buffer, &seq, sizeof(uint32_t));
+            buffer += sizeof(uint32_t);
+
+            // --- Serialize full state ---
+            memcpy(buffer, &num_players, sizeof(size_t));
+            buffer += sizeof(size_t);
+            if (num_players > 0)
+            {
+                memcpy(buffer, state_to_send.players.data(), players_data_size);
+                buffer += players_data_size;
+            }
+            memcpy(buffer, &state_to_send.npcs, npc_data_size);
+
+            // --- Send full state ---
+            try
+            {
+                auto sent = m_publishSocket->send(zmq::buffer(reuse_buf.data(), total_size), zmq::send_flags::dontwait);
+            }
+            catch (const zmq::error_t &e)
+            {
+                if (e.num() != EAGAIN)
                 {
-                    NPCState &n = state_to_send.npcs[npc_idx];
-                    n.objectId = obj->getComponent<int>("npc_id");
-                    Vector pos = obj->getComponent<Vector>("position");
-                    n.x = pos.x;
-                    n.y = pos.y;
-                    npc_idx++;
+                    std::cerr << "[Network] 'FullState' send threw zmq::error_t: " << e.what() << std::endl;
                 }
             }
-            state_to_send.num_clients = state_to_send.players.size();
-        }
-
-        const size_t num_players = state_to_send.players.size();
-        const size_t players_data_size = num_players * sizeof(PlayerState);
-        const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
-        const size_t total_size = sizeof(uint64_t) + sizeof(size_t) + players_data_size + npc_data_size;
-
-        if (reuse_buf.size() < total_size)
-            reuse_buf.resize(total_size);
-        char *buffer = reuse_buf.data();
-
-        // Write server timestamp first (ms since epoch)
-        uint64_t server_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                    std::chrono::system_clock::now().time_since_epoch())
-                                    .count();
-        memcpy(buffer, &server_ts_ms, sizeof(uint64_t));
-        buffer += sizeof(uint64_t);
-
-        // Write sequence number (uint32_t) to detect missed packets on client
-        static uint32_t publish_seq = 0;
-        uint32_t seq = publish_seq++;
-        memcpy(buffer, &seq, sizeof(uint32_t));
-        buffer += sizeof(uint32_t);
-
-        memcpy(buffer, &num_players, sizeof(size_t));
-        buffer += sizeof(size_t);
-        if (num_players > 0)
-        {
-            memcpy(buffer, state_to_send.players.data(), players_data_size);
-            buffer += players_data_size;
-        }
-        memcpy(buffer, &state_to_send.npcs, npc_data_size);
-
-        bool send_ok = false;
-        auto send_start = std::chrono::steady_clock::now();
-        try
-        {
-            // Use non-blocking send so publisher isn't stalled by slow subscribers
-            auto sent = m_publishSocket->send(zmq::buffer(reuse_buf.data(), total_size), zmq::send_flags::dontwait);
-            send_ok = static_cast<bool>(sent);
-        }
-        catch (const zmq::error_t &e)
-        {
-            if (e.num() == EAGAIN)
+            catch (const std::exception &e)
             {
-                send_ok = false;
-            }
-            else
-            {
-                std::cerr << "[Network] publish send threw zmq::error_t: " << e.what() << " (num=" << e.num() << ")" << std::endl;
-                send_ok = false;
+                std::cerr << "[Network] 'FullState' send threw exception: " << e.what() << std::endl;
             }
         }
-        catch (const std::exception &e)
+        // =================================================================
+        // --- STRATEGY 2: "DeltaState" (New logic) ---
+        // (Sends ONLY changed NPCs from the m_deltaList)
+        // =================================================================
+        else if (currentStrategy == "DeltaState")
         {
-            std::cerr << "[Network] publish send threw exception: " << e.what() << std::endl;
-            send_ok = false;
+            // 1. Get the list of changed objects (deltas) from the "mailbox"
+            std::vector<GameObject *> localDeltaList;
+            {
+                std::lock_guard<std::mutex> lock(m_deltaMutex);
+                // Use swap for O(1) efficiency.
+                // This moves all elements from m_deltaList to localDeltaList
+                // and leaves m_deltaList empty, all within the lock.
+                localDeltaList.swap(m_deltaList);
+            }
+
+            // If no deltas, don't send anything
+            if (localDeltaList.empty())
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(16));
+                continue; // Skip to the next loop iteration
+            }
+
+            // 2. Package ONLY these deltas into a list of NPCStates
+            std::vector<NPCState> npc_states;
+            npc_states.reserve(localDeltaList.size());
+
+            {
+                // We still need to lock the master list to safely read
+                // the component data from the GameObject pointers.
+                std::lock_guard<std::mutex> lock(*m_objectListMutex);
+
+                for (const auto &obj : localDeltaList)
+                {
+                    // The test harness only adds NPCs to the delta list
+                    if (obj->hasComponent("is_npc"))
+                    {
+                        NPCState n;
+                        n.objectId = obj->getComponent<int>("npc_id");
+                        Vector pos = obj->getComponent<Vector>("position");
+                        n.x = pos.x;
+                        n.y = pos.y;
+                        npc_states.push_back(n);
+                    }
+                }
+            }
+
+            // If the list somehow only had non-NPCs, skip
+            const size_t num_npcs = npc_states.size();
+            if (num_npcs == 0)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(16));
+                continue; // Skip to the next loop iteration
+            }
+
+            // 3. Serialize into buffer (NEW DELTA PACKET FORMAT)
+            // Format: timestamp(u64) + sequence(u32) + num_npcs(size_t) + NPCState[]
+            // *Notice this packet is MUCH smaller: no player data, no MAX_NPCS padding*
+            const size_t npc_data_size = num_npcs * sizeof(NPCState);
+            const size_t total_size = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(size_t) + npc_data_size;
+
+            if (reuse_buf.size() < total_size)
+                reuse_buf.resize(total_size);
+            char *buffer = reuse_buf.data();
+
+            // Write server timestamp
+            uint64_t server_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                        std::chrono::system_clock::now().time_since_epoch())
+                                        .count();
+            memcpy(buffer, &server_ts_ms, sizeof(uint64_t));
+            buffer += sizeof(uint64_t);
+
+            // Write sequence number
+            uint32_t seq = publish_seq++;
+            memcpy(buffer, &seq, sizeof(uint32_t));
+            buffer += sizeof(uint32_t);
+
+            // --- Serialize delta state ---
+            memcpy(buffer, &num_npcs, sizeof(size_t));
+            buffer += sizeof(size_t);
+            memcpy(buffer, npc_states.data(), npc_data_size);
+
+            // 4. Send the delta buffer
+            try
+            {
+                auto sent = m_publishSocket->send(zmq::buffer(reuse_buf.data(), total_size), zmq::send_flags::dontwait);
+            }
+            catch (const zmq::error_t &e)
+            {
+                if (e.num() != EAGAIN)
+                {
+                    std::cerr << "[Network] 'DeltaState' send threw zmq::error_t: " << e.what() << std::endl;
+                }
+            }
+            catch (const std::exception &e)
+            {
+                std::cerr << "[Network] 'DeltaState' send threw exception: " << e.what() << std::endl;
+            }
         }
 
+        // Shared sleep for both strategies
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 }
+
 /**
  * Closes sockets and contexts.
+ * Assumes all threads have ALREADY been joined.
  */
 void NetworkManager::cleanUp()
 {
-    if (!m_isInitialized || !m_running)
-        return;
-
+    // The m_running flag should already be false, but we set it again
+    // just in case cleanUp is called from somewhere else (e.g., a destructor).
     m_running = false;
-    if (m_handshakeThread.joinable())
-        m_handshakeThread.join();
-    if (m_updateThread.joinable())
-        m_updateThread.join();
 
-    {
-        std::lock_guard<std::mutex> lock(m_clientsMutex);
-        for (auto &pair : m_clients)
-        {
-            if (pair.second.thread.joinable())
-            {
-                pair.second.thread.join();
-            }
-        }
-        m_clients.clear();
-    }
-
-    // Now we can close the member sockets because they exist
+    // Now we just close the member sockets
+    std::cout << "[Network] Cleaning up sockets..." << std::endl;
     m_requestSocket.reset();
     m_subscribeSocket.reset();
     m_publishSocket.reset();
     m_handshakeSocket.reset();
+
     if (m_context)
     {
+        std::cout << "[Network] Closing ZMQ context..." << std::endl;
+        // Use shutdown() then close() for a cleaner exit
+        m_context->shutdown();
         m_context->close();
         m_context.reset();
     }
+
     m_isInitialized = false;
     m_role = Role::NONE;
+    std::cout << "[Network] Cleanup complete." << std::endl;
+}
+
+void NetworkManager::setNetworkingStrategy(const std::string &strategy)
+{
+    // Use a lock in case the messageLooper thread reads it at the same time
+    std::lock_guard<std::mutex> lock(m_strategyMutex);
+    m_strategy = strategy;
+    std::cout << "NetworkManager strategy set to: " << m_strategy << std::endl;
+}
+
+// Add this new function to network.cpp
+void NetworkManager::publishDeltaState(const std::vector<GameObject *> &changedObjects)
+{
+    std::lock_guard<std::mutex> lock(m_deltaMutex);
+    // Copy the pointers from the changed list into our internal delta list
+    // We'll append, in case the server loop is faster than the network loop
+    m_deltaList.insert(m_deltaList.end(), changedObjects.begin(), changedObjects.end());
+}
+
+// In network.cpp
+void NetworkManager::stopServer()
+{
+    std::cout << "NetworkManager::stopServer() called." << std::endl;
+    m_running = false; // Signal all threads to stop
+
+    // 1. Join main server threads first
+    if (m_handshakeThread.joinable())
+    {
+        m_handshakeThread.join();
+    }
+    if (m_updateThread.joinable())
+    {
+        m_updateThread.join();
+    }
+    std::cout << "[Network] Main server threads joined." << std::endl;
+
+    // 2. Safely get a list of client threads to join
+    std::vector<std::thread> client_threads_to_join;
+    {
+        std::lock_guard<std::mutex> lock(m_clientsMutex);
+        std::cout << "[Network] Moving " << m_clients.size() << " client threads to join vector..." << std::endl;
+        for (auto &pair : m_clients)
+        {
+            if (pair.second.thread.joinable())
+            {
+                // Move the thread object into our local vector
+                client_threads_to_join.push_back(std::move(pair.second.thread));
+            }
+        }
+        m_clients.clear(); // The map is now empty
+    } // m_clientsMutex is RELEASED here
+
+    // 3. Join all client threads (now safe, no lock is held)
+    std::cout << "[Network] Joining " << client_threads_to_join.size() << " client threads..." << std::endl;
+    for (auto &th : client_threads_to_join)
+    {
+        th.join();
+    }
+    std::cout << "[Network] All client threads joined." << std::endl;
+
+    // 4. Cleanup ZMQ sockets
+    cleanUp();
+}
+
+int NetworkManager::getConnectedClientCount()
+{
+    std::lock_guard<std::mutex> lock(m_clientsMutex);
+    return m_clients.size();
 }

@@ -1,0 +1,211 @@
+#include <iostream>
+#include <thread>
+#include <chrono>
+#include <vector>
+#include <mutex>
+#include <cmath>
+#include <random>
+
+#include "../headers/server_testable.h"
+#include "../headers/timeline.h"
+#include "../headers/gameUtils.h"
+
+/**
+ * Initializes the game state for testing.
+ */
+void initialize_test_game_state(std::vector<GameObject*>& list, std::mutex& mutex,
+                                int num_static_objects, int num_moving_objects)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    // Clear any old objects
+    for (auto* obj : list) {
+        delete obj;
+    }
+    list.clear();
+
+    // Setup for random positions
+    std::mt19937 rng(std::random_device{}());
+    std::uniform_real_distribution<float> pos_dist(100.0f, 1820.0f);
+    std::uniform_real_distribution<float> vel_dist(50.0f, 150.0f);
+
+    // Create static platforms
+    for (int i = 0; i < num_static_objects; ++i) {
+        GameObject* platform = new GameObject();
+        platform->setComponent("is_platform", true);
+        platform->setComponent("object_id", -(i + 1)); // Negative IDs for static
+        platform->setComponent("position", Vector(pos_dist(rng), pos_dist(rng)));
+        platform->setComponent("dimensions", Vector(62.0f, 30.0f));
+        list.push_back(platform);
+    }
+
+    // Create moving NPCs
+    for (int i = 0; i < num_moving_objects; ++i) {
+        GameObject* npc = new GameObject();
+        npc->setComponent("is_npc", true);
+        npc->setComponent("npc_id", i); // Positive IDs for moving
+        npc->setComponent("position", Vector(pos_dist(rng), pos_dist(rng)));
+        
+        float velX = (i % 2 == 0) ? vel_dist(rng) : -vel_dist(rng);
+        float velY = (i % 3 == 0) ? vel_dist(rng) : -vel_dist(rng);
+        npc->setComponent("velocity", Vector(velX, velY));
+        
+        npc->setComponent("dimensions", Vector(30.0f, 15.0f));
+        list.push_back(npc);
+    }
+}
+
+/**
+ * A generic update function for all moving test objects.
+ */
+void update_test_moving_object(GameObject* obj, float dt)
+{
+    if (!obj->hasComponent("is_npc")) {
+        return;
+    }
+
+    Vector pos = obj->getComponent<Vector>("position");
+    Vector vel = obj->getComponent<Vector>("velocity");
+
+    const float leftBound = 0.0f;
+    const float rightBound = 1920.0f;
+    const float upBound = 0.0f;
+    const float downBound = 1080.0f;
+
+    float nextX = pos.x + vel.x * dt;
+    float nextY = pos.y + vel.y * dt;
+
+    if (nextX > rightBound) {
+        nextX = rightBound - (nextX - rightBound);
+        vel.x *= -1.0f;
+    } else if (nextX < leftBound) {
+        nextX = leftBound + (leftBound - nextX);
+        vel.x *= -1.0f;
+    }
+    if (nextY > downBound) {
+        nextY = downBound - (nextY - downBound);
+        vel.y *= -1.0f;
+    } else if (nextY < upBound) {
+        nextY = upBound + (upBound - nextY);
+        vel.y *= -1.0f;
+    }
+
+    pos.x = nextX;
+    pos.y = nextY;
+    obj->setComponent("position", pos);
+    obj->setComponent("velocity", vel);
+}
+
+
+/**
+ * The main server loop, refactored into a callable function.
+ */
+void run_server_experiment(long num_iterations, const std::string& strategy,
+                           int num_static_objects, int num_moving_objects, int num_clients_to_wait_for)
+{
+    std::cout << "Starting server experiment. Strategy: " << strategy
+              << ", Static: " << num_static_objects
+              << ", Moving: " << num_moving_objects
+              << ", Iterations: " << num_iterations << std::endl;
+
+    std::vector<GameObject*> serverMasterObjectList;
+    std::mutex serverObjectListMutex;
+
+    // 1. Initialize game state based on parameters
+    initialize_test_game_state(serverMasterObjectList, serverObjectListMutex,
+                               num_static_objects, num_moving_objects);
+
+    NetworkManager serverManager;
+    const int REPLY_PORT = 6000;
+    const int PUBLISH_PORT = 5556;
+    const int HANDSHAKE_PORT = 5557;
+
+    // 2. Start the server (this starts its threads)
+    if (!serverManager.startServer(REPLY_PORT, PUBLISH_PORT, HANDSHAKE_PORT, 5000,
+                                  serverMasterObjectList, serverObjectListMutex))
+    {
+        std::cerr << "Failed to start the server." << std::endl;
+        return;
+    }
+    
+    // --- CRITICAL ---
+    // You MUST add this function to your NetworkManager class
+    serverManager.setNetworkingStrategy(strategy);
+    // ----------------
+
+    // --- NEW SYNCHRONIZATION BLOCK ---
+    // Wait for all clients to connect BEFORE starting the high-speed loop.
+    // This gives the handleHandshakes thread priority.
+    std::cout << "[Server] Waiting for " << num_clients_to_wait_for 
+              << " clients to connect..." << std::endl;
+    
+    auto wait_start = std::chrono::steady_clock::now();
+    while (serverManager.getConnectedClientCount() < num_clients_to_wait_for)
+    {
+        // Sleep and let other threads (like handshake) run
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - wait_start).count() > 20)
+        {
+            // Failsafe timeout
+            std::cerr << "[Server] ERROR: Timed out waiting for clients. "
+                      << "Only " << serverManager.getConnectedClientCount() 
+                      << " connected. Aborting run." << std::endl;
+            serverManager.stopServer();
+            return; // Exit this function, which ends the thread
+        }
+    }
+    
+    std::cout << "[Server] All " << serverManager.getConnectedClientCount() 
+              << " clients connected! Starting high-speed loop." << std::endl;
+    // --- END NEW BLOCK ---
+
+    float fixed_dt = 1.0f / 60.0f; // Use a fixed delta for consistent tests
+    long current_iter = 0;
+
+    while (current_iter < num_iterations)
+    {
+        std::vector<GameObject*> changedObjects; // For delta state
+
+        {
+            std::lock_guard<std::mutex> lock(serverObjectListMutex);
+            for (auto &obj : serverMasterObjectList)
+            {
+                update_test_moving_object(obj, fixed_dt);
+                if (obj->hasComponent("is_npc")) {
+                    changedObjects.push_back(obj);
+                }
+            }
+        } // Mutex is released here
+
+        
+        // --- CRITICAL: NETWORKING STRATEGY ---
+        if (strategy == "DeltaState")
+        {
+            // --- Strategy 2: Delta State ---
+            // You MUST add this function to NetworkManager.
+            serverManager.publishDeltaState(changedObjects);
+        }
+        
+        current_iter++;
+    }
+
+    std::cout << "Simulation complete. Stopping server..." << std::endl;
+    
+    // You MUST add a function to stop the threads in NetworkManager
+    serverManager.stopServer();
+    // ----------------
+    
+    // Cleanup
+    {
+        std::lock_guard<std::mutex> lock(serverObjectListMutex);
+        for (auto* obj : serverMasterObjectList) {
+            delete obj;
+        }
+        serverMasterObjectList.clear();
+    }
+}
+
+// NOTE: This file (server_testable.cpp) deliberately has NO main() function.
+// The main() function in performance_test.cpp will be the entry point.

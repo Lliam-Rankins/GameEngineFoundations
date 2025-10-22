@@ -105,7 +105,38 @@ int main(int argc, char *argv[])
 	const int HANDSHAKE_PORT = 5557;
 	const int SUBSCRIBE_PORT = 5556;
 	int myRequestPort;
-	int myClientId = networkManager.connectAndHandshake("localhost", HANDSHAKE_PORT, myRequestPort);
+
+	// --- START REPLACEMENT ---
+    int myClientId = -1;
+    const int MAX_RETRIES = 10; // Try for 10 seconds
+    int retries = 0;
+    
+    std::cout << "[Client] Started. Attempting to connect to server..." << std::endl;
+
+    // Keep trying to connect until we succeed or run out of retries
+    while (myClientId == -1 && retries < MAX_RETRIES)
+    {
+        // This will print "Sent handshake..." from inside your network code
+        myClientId = networkManager.connectAndHandshake("localhost", HANDSHAKE_PORT, myRequestPort);
+        
+        if (myClientId == -1)
+        {
+            retries++;
+            std::cerr << "[Client] Connection attempt " << retries << " failed. Retrying in 1 second..." << std::endl;
+            // Wait 1 second before trying again
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    }
+
+    // If we still failed after all retries, then we give up.
+    if (myClientId == -1)
+    {
+        std::cerr << "[Client] FAILED to connect to server after " << MAX_RETRIES << " attempts." << std::endl;
+        return 1; // Now it's a real failure
+    }
+    
+    std::cout << "[Client] Successfully connected with Client ID: " << myClientId << std::endl;
+    // --- END REPLACEMENT ---
 
 	if (myClientId == -1)
 	{
