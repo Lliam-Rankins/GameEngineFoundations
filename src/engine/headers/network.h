@@ -114,8 +114,8 @@ private:
     std::mutex m_clientsMutex;
     std::map<int, PlayerState> m_playerStates;
     std::mutex m_playerStatesMutex;
-    std::vector<GameObject *> *m_masterObjectList;
-    std::mutex *m_objectListMutex;
+    std::vector<GameObject *> m_masterObjectList;
+    std::mutex m_objectListMutex;
     Role m_role;
     
     int m_clientId;

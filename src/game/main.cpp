@@ -8,6 +8,7 @@
 #include "../engine/headers/entities.h"
 #include "../engine/headers/input.h"
 #include "../engine/headers/timeline.h"
+#include "../engine/headers/GameObject.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -45,8 +46,8 @@ std::thread myNetworkThread;
 std::mutex playersMutex;
 std::mutex npcMutex;
 NetworkManager myNetwork;
-std::map<int, std::unique_ptr<Entity>> remotePlayers;
-std::map<int, std::unique_ptr<Entity>> remoteNPCs;
+std::map<int, std::unique_ptr<GameObject>> remotePlayers;
+std::map<int, std::unique_ptr<GameObject>> remoteNPCs;
 Vector remoteMovPlat_Pos;
 
 SDL_Texture* playerTex;
@@ -72,9 +73,15 @@ void texCheck(SDL_Texture* tex) {
 }
 
 // Render entity
-void renderEntity(const Entity& e) {
-    SDL_FRect rectangle = { e.position.x - e.dimensions.x, e.position.y - e.dimensions.y, e.dimensions.x, e.dimensions.y};
-    SDL_RenderTexture(renderer, e.texture, NULL, &rectangle);
+void renderEntity(GameObject& e) {
+	if (e.hasComponent("Position") && e.hasComponent("Dimensions") && e.hasComponent("tex")) {
+		Vector pos = e.getComponent<Vector>("Position");
+		Vector dim = e.getComponent<Vector>("Dimensions");
+		SDL_Texture* tex = e.getComponent<SDL_Texture *>("tex");
+
+		SDL_FRect rectangle = { pos.x - dim.x, pos.y - dim.y, dim.x, dim.y};
+		SDL_RenderTexture(renderer, tex, NULL, &rectangle);
+	}
 }
 
 
@@ -85,7 +92,7 @@ void renderEntity(const Entity& e) {
 //////////////////////////////////////////////////
 
 // Rendering Thread
-void rendering(Entity *player, Entity *movingPlat, Entity *plat, int *myID) {
+void rendering(GameObject *player, GameObject *movingPlat, GameObject *plat, int *myID) {
 	// Loop Forever
 	while (true) {
 		// Setup the Screen
@@ -111,12 +118,12 @@ void rendering(Entity *player, Entity *movingPlat, Entity *plat, int *myID) {
 }
 
 // Network Thread
-void networking(NetworkManager *myNetwork, int *myID, Entity *localPlayer, Entity *movingPlat) {
+void networking(NetworkManager *myNetwork, int *myID, GameObject *localPlayer, GameObject *movingPlat) {
 	// Loop Forever
 	while (true) {
 		PlayerState myPlayerState;
 
-		Vector pos = localPlayer->getPosition();
+		Vector pos = localPlayer->getComponent<Vector>("Position");
 		myPlayerState.clientId = *myID;
 		myPlayerState.x = pos.x;
 		myPlayerState.y = pos.y; 
@@ -126,10 +133,17 @@ void networking(NetworkManager *myNetwork, int *myID, Entity *localPlayer, Entit
 		
 		auto newGameState = myNetwork->getLatestGameState();
 
+
+
+		std::cout << "Got Game State" << std::endl;
+
 		// Check to make sure that there is a game state
 		if (!newGameState.has_value()) continue;
 
 		GameState gameState = newGameState.value();
+
+		std::cout << "Non Null Game State" << std::endl;
+
 
 		//Update remotePlayers
 		{
@@ -137,6 +151,7 @@ void networking(NetworkManager *myNetwork, int *myID, Entity *localPlayer, Entit
 			std::unique_lock<std::mutex> cv_lock(playersMutex);
 
 			// For every client
+			// TODO: will need to remove player when i stop receiving their information from server
 			for (int i = 0; i < gameState.num_clients; i++) {
 				// Grab player i
 				PlayerState playerState = gameState.players[i];
@@ -144,15 +159,21 @@ void networking(NetworkManager *myNetwork, int *myID, Entity *localPlayer, Entit
 				// Not me
 				if (playerState.clientId == *myID) continue;
 
+				Vector remotePlayerPosition = {playerState.x, playerState.y};
+
 				// Otherwise, Update or create new player
-				if (remotePlayers.find(playerState.clientId) == remotePlayers.end()) {		
-					remotePlayers[i] = std::make_unique<Entity>(playerPos, playerTex, true);
+				if (remotePlayers.find(playerState.clientId) == remotePlayers.end()) {	
+					// Make new Player Game Object 
+					remotePlayers[i] = std::make_unique<GameObject>();
+					remotePlayers[i]->setComponent("Position", remotePlayerPosition);
 				}
 				else {
-					if (!isPaused) remotePlayers[i]->setPosition({playerState.x, playerState.y});
+					if (!isPaused) remotePlayers[i]->setComponent("Position", remotePlayerPosition);
 				}
 			}
 		}
+
+		std::cout << "Read In Players" << std::endl;
 
 		//Update NPCs
 		{
@@ -160,11 +181,16 @@ void networking(NetworkManager *myNetwork, int *myID, Entity *localPlayer, Entit
 			std::unique_lock<std::mutex> cv_lock(npcMutex);
 
 			NPCState movingPlatformState = gameState.npcs[0];
+			std::cout << movingPlatformState.x << std::endl;
 
 			// Making Sure we arent paused
-			if (!isPaused) movingPlat->setPosition({movingPlatformState.x, movingPlatformState.y});
+			Vector movingPlatformPosition = {movingPlatformState.x, movingPlatformState.y};
+
+			std::cout << "Updating Platform Pos" << std::endl;
+			if (!isPaused) movingPlat->setComponent("Position", movingPlatformPosition);
 		}
 
+		
 
 		// Wait
 		std::this_thread::sleep_for(std::chrono::milliseconds(33));
@@ -208,26 +234,28 @@ int main(int argc, char* argv[])
 
 	// Entity creation
 	// players[0] = std::make_unique<Entity>(playerPos, playerTex, true);
-	Entity player = Entity(playerPos, playerTex, true);
+	GameObject player = GameObject();
+	player.setComponent("Position", playerPos);
+	player.setComponent("Velocity", defaultVel);
+	player.setComponent("Dimensions", playerDim);
+	player.setComponent("tex", playerTex);
+	player.setComponent("physics", true);
 
-	Entity platform_1(platformPos_1, brickDim, brickTex, false, defaultVel);
-	Entity localMovingPlat(movingPlatPos_1, brickDim, brickTex, false); //Moves to the Right
+	GameObject platform_1 = GameObject();
+	platform_1.setComponent("Position", platformPos_1);
+	platform_1.setComponent("Dimensions", brickDim);
+	platform_1.setComponent("tex", brickTex);
+	platform_1.setComponent("physics", false);
 
-
-	//Creating and Setting Colliders
-	Collider playerCol(0, 0, 0, 0);
-	player.setCollider(&playerCol);
-
-	Collider platformCol_1(0, 0, 0, 0);
-	platform_1.setCollider(&platformCol_1);
-
-	Collider movingPlatCol_1(0, 0, 0, 0);
-	localMovingPlat.setCollider(&movingPlatCol_1);
-
+	GameObject movingPlat_1 = GameObject();
+	movingPlat_1.setComponent("Position", movingPlatPos_1);
+	movingPlat_1.setComponent("Velocity", defaultVel);
+	movingPlat_1.setComponent("Dimensions", brickDim);
+	movingPlat_1.setComponent("tex", brickTex);
+	movingPlat_1.setComponent("physics", false);
 
 	// Setting Gravity
 	WorldPhysics::setGravity(gravity);
-
 
 	// Time Line Setup
 	Timeline timeline;
@@ -251,12 +279,6 @@ int main(int argc, char* argv[])
 
 	std::cout << "Client Id: " << myID << std::endl;
 	myNetwork.startClient("localhost", REQUEST_BASE_PORT + myID, SUBSCRIBE_PORT);
-
-	// Start the client and receive client id
-	
-
-	
-
 	
 
 	//////////////////////////////////////////////////
@@ -266,10 +288,10 @@ int main(int argc, char* argv[])
 	//////////////////////////////////////////////////
 
 	// Start Networking Thread
-	std::thread netThread(&networking, &myNetwork, &myID, &player, &localMovingPlat);
+	std::thread netThread(&networking, &myNetwork, &myID, &player, &movingPlat_1);
 
 	// Start Rendering Thread
-	std::thread renderThread(&rendering, &player, &localMovingPlat, &platform_1, &myID);
+	std::thread renderThread(&rendering, &player, &movingPlat_1, &platform_1, &myID);
 
 
 	//////////////////////////////////////////////////
@@ -369,8 +391,7 @@ int main(int argc, char* argv[])
 		// Gameplay Updates
 		//
 		//////////////////////////////////////////////////
-		platform_1.updatePosition(isPaused);
-		localMovingPlat.updatePosition(isPaused);
+		updatePosition(movingPlat_1, isPaused);
 
 		//////////////////////////////////////////////////
 		//
@@ -378,28 +399,32 @@ int main(int argc, char* argv[])
 		//
 		//////////////////////////////////////////////////
 		// Player Movement
+		Vector vel = player.getComponent<Vector>("Velocity");
 		if (isKeyPressed(SDL_SCANCODE_W) || isKeyPressed(SDL_SCANCODE_SPACE)) {	// Jump
-			player.changeVelocity({0, -playerJumpSpeed * d_time});
+			vel.y += -playerJumpSpeed * d_time;
 		}
-		if (isKeyPressed(SDL_SCANCODE_A)) {	
-			player.changeVelocity({-playerSpeed * d_time, 0});					// Left
+		if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
+			vel.x += -playerSpeed * d_time;
 		}
 		if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
-			player.changeVelocity({0, playerJumpSpeed * d_time});
+			vel.y += playerJumpSpeed * d_time;
 		}
 		if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
-			player.changeVelocity({playerSpeed * d_time, 0});	
+			vel.x += playerSpeed * d_time;	
 		}
 
 		
 		
 		// Check if player is not coliding with anything
-		if (!overlappingColliders(*player.collider, *platform_1.collider) && !overlappingColliders(*player.collider, *localMovingPlat.collider)) {
-			player.changeVelocity({0, WorldPhysics::getGravity() * d_time});
+		if (!overlappingColliders1(player, platform_1) && !overlappingColliders1(player, movingPlat_1)) {
+			vel.y += WorldPhysics::getGravity() * d_time;
 		}
 
-		player.updatePosition(isPaused);
-		player.setVelocity({0,0});
+		player.setComponent("Velocity", vel);
+
+		// Move player and then reset their velocity
+		updatePosition(player, isPaused);
+		player.setComponent("Velocity", defaultVel);
 
 
 

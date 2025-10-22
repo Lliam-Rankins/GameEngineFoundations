@@ -140,6 +140,63 @@ void NetworkManager::sendNPCState(const NPCState &state)
     }
 }
 
+
+/**
+ * AI USE:
+ * Using Gemini I explained the structure of the m_masterObject list, nature of the NPC/GameObjects,
+ * and asked for a method to update this vector. Adjusted to work as needed.
+ */
+/**
+ * Updates a specific NPC's state in the master game object list.
+ * This function bridges the network NPCState (from server logic) back to 
+ * the game engine's master list for synchronization.
+ * * @param npc The incoming NPCState struct containing the new position and id.
+ */
+void NetworkManager::updateGameStateNPC(NPCState &npc) {
+    // 1. Lock the mutex protecting the master object list
+    // Assuming m_objectListMutex is now a direct member std::mutex
+    std::lock_guard<std::mutex> lock(m_objectListMutex); 
+
+    // 2. Iterate through the master list to find the matching NPC
+    for (const auto& obj : m_masterObjectList) {
+        
+        // Check if the object is an NPC AND has a matching ID
+        if (obj->hasComponent("is_npc")) {
+            
+            // Assuming getComponent<int>("npc_id") retrieves the NPC's unique identifier
+            int object_npc_id = obj->getComponent<int>("npc_id");
+            std::cout << object_npc_id << std::endl;
+
+            if (object_npc_id == npc.objectId) {
+                // 3. Update the components of the located NPC game object
+                                
+                // Assuming setComponent is a method to update object properties
+                obj->setComponent("position", Vector{npc.x, npc.y}); 
+
+                // 4. Optimization: Break once the object is found and updated
+                return;
+            }
+        }
+    }
+
+    // No Entity Found, make new
+    std::unique_ptr<GameObject> newNpcObject = std::make_unique<GameObject>();
+    // 5. Initialize the necessary components from the NPCState struct
+    
+    // Add the tags/identifiers
+    newNpcObject.get()->setComponent("is_npc", true);
+    newNpcObject.get()->setComponent("npc_id", npc.objectId); 
+    
+    // Add the position component
+    newNpcObject.get()->setComponent("position", Vector{npc.x, npc.y});
+
+    
+    // 5. Add the newly created (cloned) object to the master list
+    m_masterObjectList.push_back(std::move(newNpcObject.release()));
+    
+    // std::cout << "[Server] Added new NPC with ID: " << clonedNpc.get()->getComponent<int>("npc_id") << " to master list." << std::endl;
+}
+
 // This is used to update m_gameState's NPCs and Players without changing num_clients
 void NetworkManager::setGameState(const GameState &newState)
 {
@@ -155,10 +212,10 @@ GameState NetworkManager::getGameState()
     return m_gameState;
 }
 
-void NetworkManager::updateGameStateNPC(NPCState &npc) {
-    std::lock_guard<std::mutex> lock(m_gameStateMut);
-    m_gameState.npcs[npc.objectId] = npc;
-}
+// void NetworkManager::updateGameStateNPC(NPCState &npc) {
+//     std::lock_guard<std::mutex> lock(m_gameStateMut);
+//     m_gameState.npcs[npc.objectId] = npc;
+// }
 
 /**
  * Connects the client and the server together.
@@ -243,6 +300,7 @@ void NetworkManager::update()
     // If a new GameState was successfully received, update client's GameState
     if (result.has_value() && result.value() > 0)
     {
+        std::cout << "Received GameState" << std::endl;
         // --- DESERIALIZATION LOGIC (No change needed here) ---
         GameState newState;
         const char *buffer = gameStateMessage.data<const char>();
@@ -261,6 +319,8 @@ void NetworkManager::update()
 
         const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
         memcpy(&newState.npcs, buffer, npc_data_size);
+
+        std::cout << newState.npcs[0].y << std::endl;
 
         {
             std::lock_guard<std::mutex> lock(m_gameStateMut);
@@ -295,13 +355,14 @@ std::optional<GameState> NetworkManager::getLatestGameState()
  */
 void NetworkManager::messageLooper()
 {
+    std::cout << "Message Looper" << std::endl;
     while (m_running)
     {
         GameState state_to_send;
 
         // --- BRIDGE LOGIC: BUILD PACKET FROM GAMEOBJECTS ---
         {
-            std::lock_guard<std::mutex> lock(*m_objectListMutex);
+            std::lock_guard<std::mutex> lock(m_objectListMutex);
 
             // Reserve space for efficiency
             state_to_send.players.reserve(m_clients.size());
@@ -311,8 +372,9 @@ void NetworkManager::messageLooper()
             for (int i = 0; i < MAX_NPCS; ++i)
                 state_to_send.npcs[i].objectId = -1;
 
-            for (const auto &obj : *m_masterObjectList)
+            for (const auto &obj : m_masterObjectList)
             {
+                std::cout << obj << std::endl;
                 if (obj->hasComponent("is_player"))
                 {
                     PlayerState p;
@@ -334,6 +396,7 @@ void NetworkManager::messageLooper()
                 // Platforms and other static objects can also be sent this way
                 // if you add them to your GameState struct.
             }
+
             state_to_send.num_clients = state_to_send.players.size();
         }
         // --- END BRIDGE LOGIC ---
