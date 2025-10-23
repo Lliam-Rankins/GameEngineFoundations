@@ -520,6 +520,8 @@ void NetworkManager::readClient(int id, int portNum)
                 }
             }
 
+            std::cout << "Read Client Elapsed Time: " << elapsedTimeMs << "   TimeOut: " << m_clientTimeout << std::endl;
+
             // Timing Out 
             if (elapsedTimeMs >= m_clientTimeout)
             {

@@ -95,7 +95,7 @@ bool collidable(GameObject *a) {
 	return false;
 }
 
-void renderObj(GameObject *object) {
+void renderObj(GameObject *object, Vector offset) {
 	// Logic for adding dimensions and textures to remove players
 	if (object->hasComponent("is_player") && (!object->hasComponent("dimensions") || !object->hasComponent("texture"))) {
 		object->setComponent("dimensions", player_Dimensions);
@@ -120,7 +120,7 @@ void renderObj(GameObject *object) {
 	Vector dim = object->getComponent<Vector>("dimensions");
 
 	// Create Rectangle to render Obj
-	SDL_FRect rectangle = { pos.x, pos.y, dim.x, dim.y};
+	SDL_FRect rectangle = { pos.x - offset.x + 700, pos.y - offset.y  + 500, dim.x, dim.y};
 
 	// Object has Texture
 	if (object->hasComponent("texture")) {
@@ -162,25 +162,25 @@ void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex, G
 		// // Setup the Screen
 		setupScreen(renderer);
 
-		// Render Local Objects
-		for (const auto &object : *localObjectList) {
-			renderObj(object);
-		}
-
-		// For all players and NPCs
 		{
 			// Lock, rendering remote objects
 			std::lock_guard<std::mutex> lock(*objectMutex);
 
-			// printList(objectList);
+			// Get Player Position for offsetting others
+			Vector offset = player->getComponent<Vector>("position");
+
+
+			// Render Local Objects
+			for (const auto &object : *localObjectList) {
+				renderObj(object, offset);
+			}
 
 			// Render Each Object
 			for (const auto &object : *objectList) {
 				if (object->hasComponent("client_id") && object->getComponent<int>("client_id") == player->getComponent<int>("client_id")) continue;
-				renderObj(object);
+				renderObj(object, offset);
 			}
 		}
-		
 
 		// Wait
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -255,6 +255,11 @@ int main(int argc, char* argv[])
     std::vector<GameObject *> objectList;
 	std::vector<GameObject *> localObjects;
     std::mutex objectMutex;
+
+	// Camera
+	GameObject camera;
+	camera.setComponent("position", player_Position);
+	camera.setComponent("is_camera", true);
 
 	// Player
 	GameObject player;
