@@ -373,25 +373,52 @@ void NetworkManager::update()
         }
     }
 
-    // --- Remove disconnected objects ---
-    m_masterObjectList->erase(
-        std::remove_if(m_masterObjectList->begin(), m_masterObjectList->end(),
-                       [&](GameObject *obj)
-                       {
-                           int id = -1;
-                           if (obj->hasComponent("client_id"))
-                               id = obj->getComponent<int>("client_id");
-                           else if (obj->hasComponent("npc_id"))
-                               id = obj->getComponent<int>("npc_id");
+    // TODO: Check if code works
+    auto it = m_masterObjectList->begin();
+    while (it != m_masterObjectList->end())
+    {
+        GameObject *obj = *it;
+        bool isPlayer = obj->hasComponent("is_player");
+        bool isNpc = obj->hasComponent("is_npc");
 
-                           if (id != -1 && activeIds.find(id) == activeIds.end())
-                           {
-                               delete obj;
-                               return true;
-                           }
-                           return false;
-                       }),
-        m_masterObjectList->end());
+        int id = -1;
+        if (isPlayer)
+            id = obj->getComponent<int>("client_id");
+        else if (isNpc)
+            id = obj->getComponent<int>("npc_id");
+
+        // If it's a player or NPC and no longer active, remove it
+        if ((isPlayer || isNpc) && activeIds.find(id) == activeIds.end())
+        {
+            // Optionally: log or trigger any cleanup here
+            delete obj; // free memory if you own it
+            it = m_masterObjectList->erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    // // --- Remove disconnected objects ---
+    // m_masterObjectList->erase(
+    //     std::remove_if(m_masterObjectList->begin(), m_masterObjectList->end(),
+    //                    [&](GameObject *obj)
+    //                    {
+    //                        int id = -1;
+    //                        if (obj->hasComponent("client_id"))
+    //                            id = obj->getComponent<int>("client_id");
+    //                        else if (obj->hasComponent("npc_id"))
+    //                            id = obj->getComponent<int>("npc_id");
+
+    //                        if (id != -1 && activeIds.find(id) == activeIds.end())
+    //                        {
+    //                            delete obj;
+    //                            return true;
+    //                        }
+    //                        return false;
+    //                    }),
+    //     m_masterObjectList->end());
 }
 
 /*
@@ -492,6 +519,8 @@ void NetworkManager::readClient(int id, int portNum)
                     }
                 }
             }
+
+            // Timing Out 
             if (elapsedTimeMs >= m_clientTimeout)
             {
                 std::cout << "Client " << id << " timed out. Disconnecting." << std::endl;

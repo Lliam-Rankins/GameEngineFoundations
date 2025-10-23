@@ -39,17 +39,16 @@ Vector platform1_Position = {100, 400};
 Vector platform2_Position = {400, 400};
 Vector platform3_Position = {700, 400};
 
-SDL_Texture* movingPlatform_Texture;
-Vector movingPlatform_Dimensions;;
+SDL_Texture* platform_Texture;
+Vector platform_Dimensions;;
 
 // Spawn Zones
-Vector spawnZone1_Positon = {100, 100};
+Vector spawnZone1_Position = {100, 100};
+Vector spawnZone2_Position = {700, 100};
 
 // DeathZones
-Vector deathZone1_Position = {100, 400};
-Vector deathZone1_Dimensions = {300, 300};
-
-
+Vector deathZone1_Position = {100, 900};
+Vector deathZone1_Dimensions = {700, 100};
 
 // Game Vars
 float playerSpeed = 300.0;
@@ -105,8 +104,8 @@ void renderObj(GameObject *object) {
 
 	// Logic for adding dimensions and textures to npcs
 	if (object->hasComponent("is_npc") && (!object->hasComponent("dimensions") || !object->hasComponent("texture"))) {
-		object->setComponent("dimensions", movingPlatform_Dimensions);
-		object->setComponent("texture", movingPlatform_Texture);
+		object->setComponent("dimensions", platform_Dimensions);
+		object->setComponent("texture", platform_Texture);
 	}
 
 
@@ -114,15 +113,14 @@ void renderObj(GameObject *object) {
 	// Only Render Objects with Positions and Dimensions, and a color or texture
 	// (!object->hasComponent("color") && !object->hasComponent("texture"))
 	if (!object->hasComponent("position") || !object->hasComponent("dimensions")) {
-			std::cout << "Object lacks something" << std::endl;
-			return;
-		}
+		return;
+	}
 
 	Vector pos = object->getComponent<Vector>("position");
 	Vector dim = object->getComponent<Vector>("dimensions");
 
 	// Create Rectangle to render Obj
-	SDL_FRect rectangle = { pos.x - dim.x, pos.y - dim.y, dim.x, dim.y};
+	SDL_FRect rectangle = { pos.x, pos.y, dim.x, dim.y};
 
 	// Object has Texture
 	if (object->hasComponent("texture")) {
@@ -133,6 +131,21 @@ void renderObj(GameObject *object) {
 	else if (object->hasComponent("color")) {
 		SDL_Color color = object->getComponent<SDL_Color>("color");
 		SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+		SDL_RenderRect(renderer, &rectangle);
+	}
+	// Object has no color or texture
+	else {
+		SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
+		SDL_RenderRect(renderer, &rectangle);
+	}
+}
+
+
+void printList(std::vector<GameObject *> *objectList) {
+	for (const auto& obj : *objectList) {
+		if (obj->hasComponent("client_id")) {
+			std::cout << "Client Id:" << obj->getComponent<int>("client_id") << std::endl;
+		}
 	}
 }
 
@@ -140,7 +153,7 @@ void renderObj(GameObject *object) {
 //
 // Multithreading
 //
-//////////////////////////////////////////////////
+/////////////////\/////////////////////////////////
 
 // Rendering Thread
 void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *player, std::vector<GameObject *> *localObjectList) {
@@ -158,6 +171,8 @@ void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex, G
 		{
 			// Lock, rendering remote objects
 			std::lock_guard<std::mutex> lock(*objectMutex);
+
+			// printList(objectList);
 
 			// Render Each Object
 			for (const auto &object : *objectList) {
@@ -182,11 +197,6 @@ void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex, G
 void networking(NetworkManager *myNetwork, std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *localPlayer) {
 	// Loop Forever
 	while (true) {
-		// Get correct Object List
-		std::cout << "Pre Update" << std::endl;
-		myNetwork->update();
-		std::cout << "Updated" << std::endl;
-
 		{
 			PlayerState myPlayerState;
 			Vector pos = localPlayer->getComponent<Vector>("position");
@@ -194,9 +204,11 @@ void networking(NetworkManager *myNetwork, std::vector<GameObject *> *objectList
 			myPlayerState.x = pos.x;
 			myPlayerState.y = pos.y; 
 			myNetwork->sendPlayerState(myPlayerState);
-
-			std::cout << "Send player state" << std::endl;
 		}
+
+
+		// Get correct Object List
+		myNetwork->update();
 
 		// Wait
 		std::this_thread::sleep_for(std::chrono::milliseconds(33));
@@ -231,12 +243,12 @@ int main(int argc, char* argv[])
 	player_Texture = IMG_LoadTexture(renderer, "../media/darkworld_character_morwen_idle.png");
 	texCheck(player_Texture);
 
-	movingPlatform_Texture = IMG_LoadTexture(renderer, "../media/darkworld_platform_brick_idle.png");
-	texCheck(movingPlatform_Texture);
+	platform_Texture = IMG_LoadTexture(renderer, "../media/darkworld_platform_brick_idle.png");
+	texCheck(platform_Texture);
 
 	// Create Dimensions
 	player_Dimensions = {player_Texture->w, player_Texture->h};
-	movingPlatform_Dimensions = {movingPlatform_Texture->w, movingPlatform_Texture->h};
+	platform_Dimensions = {platform_Texture->w, platform_Texture->h};
 
 
 	// Instantiate ObjectList
@@ -257,32 +269,43 @@ int main(int argc, char* argv[])
 	GameObject platform_1 = GameObject();
 	platform_1.setComponent("position", platform1_Position);
 	platform_1.setComponent("npc_id", -1);
-	platform_1.setComponent("dimensions", movingPlatform_Dimensions);
-	platform_1.setComponent("texture", movingPlatform_Texture);
+	platform_1.setComponent("dimensions", platform_Dimensions);
+	platform_1.setComponent("texture", platform_Texture);
 
 	GameObject platform_2 = GameObject();
 	platform_2.setComponent("position", platform2_Position);
 	platform_2.setComponent("npc_id", -2);
-	platform_2.setComponent("dimensions", movingPlatform_Dimensions);
-	platform_2.setComponent("texture", movingPlatform_Texture);
+	platform_2.setComponent("dimensions", platform_Dimensions);
+	platform_2.setComponent("texture", platform_Texture);
 
 	GameObject platform_3 = GameObject();
 	platform_3.setComponent("position", platform3_Position);
 	platform_3.setComponent("npc_id", -3);
-	platform_3.setComponent("dimensions", movingPlatform_Dimensions);
-	platform_3.setComponent("texture", movingPlatform_Texture);
+	platform_3.setComponent("dimensions", platform_Dimensions);
+	platform_3.setComponent("texture", platform_Texture);
 
 	// Spawn Zones
 	GameObject spawnZone_1 = GameObject();
-	platform_3.setComponent("position", platform3_Position);
-	platform_3.setComponent("object_id", -4);
-	// TODO: Change Dimensions
-	platform_3.setComponent("dimensions", movingPlatform_Dimensions);
+	spawnZone_1.setComponent("position", spawnZone1_Position);
+	spawnZone_1.setComponent("object_id", -4);
+
+	GameObject spawnZone_2 = GameObject();
+	spawnZone_2.setComponent("position", spawnZone2_Position);
+	spawnZone_2.setComponent("object_id", -5);
+
+	// Death Zone
+	GameObject deathZone_1 = GameObject();
+	deathZone_1.setComponent("position", deathZone1_Position);
+	deathZone_1.setComponent("object_id", -6);
+	deathZone_1.setComponent("dimensions", deathZone1_Dimensions);
 
 	localObjects.push_back(&player);
 	localObjects.push_back(&platform_1);
 	localObjects.push_back(&platform_2);
 	localObjects.push_back(&platform_3);
+	localObjects.push_back(&spawnZone_1);
+	localObjects.push_back(&spawnZone_2);
+	localObjects.push_back(&deathZone_1);
 
 	// Setting Gravity
 	WorldPhysics::setGravity(gravity);
@@ -450,21 +473,66 @@ int main(int argc, char* argv[])
 			vel.x += playerSpeed * d_time;	
 		}
 
+		// Add Gravity
+		vel.y += WorldPhysics::getGravity() * d_time;
+
 		//////////////////////////////////////////////////
 		//
 		// Collisions
 		//
 		//////////////////////////////////////////////////
-		{
-			// // Check if player is not coliding with anything
-			GameObject *tempMovingPlatform1 = findGameObjectByNpcId(1, objectList);
-			
-			if (tempMovingPlatform1) {
-				std::cout << "Collisions: " << tempMovingPlatform1->hasComponent("dimensions") << std::endl;				
-				if (!overlappingColliders1(player, platform_1) && !overlappingColliders1(player, *tempMovingPlatform1)) {
-					vel.y += WorldPhysics::getGravity() * d_time;
+		
+		// Check Local Platforms
+		if (collidable(&player) && collidable(&platform_1) && collidable(&platform_2) && collidable(&platform_3)) {				
+			if (overlappingColliders1(player, platform_1) || overlappingColliders1(player, platform_2) || overlappingColliders1(player, platform_3)) {				
+				// If on platform, stop moving down
+				if (vel.y > 0) vel.y = 0;
+			}
+		}
+
+		// Check Death Zones
+		if (collidable(&player) && collidable(&deathZone_1)) {
+			if (overlappingColliders1(player, deathZone_1)) {
+				std::cout << "HAHA, you died" << std::endl;
+
+				int spawnZone_choice = random() % 2;
+				std::cout << "Spawn Zone Choice: " << spawnZone_choice << std::endl;
+				switch (spawnZone_choice) {
+					case 0:
+						player.setComponent("position", spawnZone1_Position);
+						break;
+					case 1:
+						player.setComponent("position", spawnZone2_Position);
+						break;
 				}
-			}	
+
+			}
+		}
+
+		// Check Remote Platforms
+		{
+			// Lock, remote objects
+			std::lock_guard<std::mutex> lock(objectMutex);
+
+			// Check if player is not coliding with anything
+			GameObject *movingPlatformHorizontal = findGameObjectByNpcId(1, objectList);
+			GameObject *movingPlatformVertical = findGameObjectByNpcId(2, objectList);
+
+			// Do we have the remote objects
+			if (movingPlatformHorizontal && movingPlatformVertical) {
+				if (collidable(movingPlatformHorizontal) && collidable(movingPlatformVertical)) {
+					if (overlappingColliders1(player, *movingPlatformHorizontal) || overlappingColliders1(player, *movingPlatformVertical)) {
+						std::cout << "Remote Colliding -------" << std::endl;
+						
+						// Stop Moving Down
+						if (vel.y > 0) vel.y = 0;
+					}
+				}
+			}
+			else {
+				std::cout << "findGameObject Failed" << std::endl;
+			}
+
 		}
 		
 		
