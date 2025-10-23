@@ -91,6 +91,11 @@ void texCheck(SDL_Texture* tex) {
 	}
 }
 
+bool collidable(GameObject *a) {
+	if (a->hasComponent("position") && a->hasComponent("dimensions")) return true;
+	return false;
+}
+
 void renderObj(GameObject *object) {
 	// Logic for adding dimensions and textures to remove players
 	if (object->hasComponent("is_player") && (!object->hasComponent("dimensions") || !object->hasComponent("texture"))) {
@@ -107,8 +112,8 @@ void renderObj(GameObject *object) {
 
 
 	// Only Render Objects with Positions and Dimensions, and a color or texture
-	if (!object->hasComponent("position") || !object->hasComponent("dimensions") || 
-	   (!object->hasComponent("color") && !object->hasComponent("texture"))) {
+	// (!object->hasComponent("color") && !object->hasComponent("texture"))
+	if (!object->hasComponent("position") || !object->hasComponent("dimensions")) {
 			std::cout << "Object lacks something" << std::endl;
 			return;
 		}
@@ -121,13 +126,11 @@ void renderObj(GameObject *object) {
 
 	// Object has Texture
 	if (object->hasComponent("texture")) {
-		std::cout << "Textured Obj" << std::endl;
 		SDL_Texture* tex = object->getComponent<SDL_Texture *>("texture");
 		SDL_RenderTexture(renderer, tex, NULL, &rectangle);
 	}
 	// Object has Color
-	else {
-		std::cout << "Colored Obj" << std::endl;
+	else if (object->hasComponent("color")) {
 		SDL_Color color = object->getComponent<SDL_Color>("color");
 		SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
 	}
@@ -140,14 +143,16 @@ void renderObj(GameObject *object) {
 //////////////////////////////////////////////////
 
 // Rendering Thread
-void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *player) {
+void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *player, std::vector<GameObject *> *localObjectList) {
 	// Loop Forever
 	while (true) {
 		// // Setup the Screen
 		setupScreen(renderer);
 
-		// Render Local Player
-		// renderObj(player);
+		// Render Local Objects
+		for (const auto &object : *localObjectList) {
+			renderObj(object);
+		}
 
 		// For all players and NPCs
 		{
@@ -156,9 +161,11 @@ void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex, G
 
 			// Render Each Object
 			for (const auto &object : *objectList) {
+				if (object->hasComponent("client_id") && object->getComponent<int>("client_id") == player->getComponent<int>("client_id")) continue;
 				renderObj(object);
 			}
 		}
+		
 
 		// Wait
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -176,23 +183,24 @@ void networking(NetworkManager *myNetwork, std::vector<GameObject *> *objectList
 	// Loop Forever
 	while (true) {
 		// Get correct Object List
+		std::cout << "Pre Update" << std::endl;
 		myNetwork->update();
 		std::cout << "Updated" << std::endl;
 
 		{
 			PlayerState myPlayerState;
 			Vector pos = localPlayer->getComponent<Vector>("position");
-			myPlayerState.clientId = -1;
+			myPlayerState.clientId = localPlayer->getComponent<int>("client_id");
 			myPlayerState.x = pos.x;
 			myPlayerState.y = pos.y; 
 			myNetwork->sendPlayerState(myPlayerState);
+
+			std::cout << "Send player state" << std::endl;
 		}
 
 		// Wait
 		std::this_thread::sleep_for(std::chrono::milliseconds(33));
 	}
-
-	std::cout << "Sent Player state" << std::endl;
 }
 
 void handleMovement() {
@@ -233,14 +241,13 @@ int main(int argc, char* argv[])
 
 	// Instantiate ObjectList
     std::vector<GameObject *> objectList;
+	std::vector<GameObject *> localObjects;
     std::mutex objectMutex;
 
-	// Entity creation
-	// players[0] = std::make_unique<Entity>(player_Position, playerTex, true);
-	GameObject player = GameObject();
+	// Player
+	GameObject player;
 	player.setComponent("position", player_Position);
 	player.setComponent("is_player", true);
-	player.setComponent("object_id", 0);
 	player.setComponent("velocity", player_Velocity);
 	player.setComponent("dimensions", player_Dimensions);
 	player.setComponent("texture", player_Texture);
@@ -249,19 +256,19 @@ int main(int argc, char* argv[])
 	// Platforms
 	GameObject platform_1 = GameObject();
 	platform_1.setComponent("position", platform1_Position);
-	platform_1.setComponent("object_id", -1);
+	platform_1.setComponent("npc_id", -1);
 	platform_1.setComponent("dimensions", movingPlatform_Dimensions);
 	platform_1.setComponent("texture", movingPlatform_Texture);
 
 	GameObject platform_2 = GameObject();
 	platform_2.setComponent("position", platform2_Position);
-	platform_2.setComponent("object_id", -2);
+	platform_2.setComponent("npc_id", -2);
 	platform_2.setComponent("dimensions", movingPlatform_Dimensions);
 	platform_2.setComponent("texture", movingPlatform_Texture);
 
 	GameObject platform_3 = GameObject();
 	platform_3.setComponent("position", platform3_Position);
-	platform_3.setComponent("object_id", -3);
+	platform_3.setComponent("npc_id", -3);
 	platform_3.setComponent("dimensions", movingPlatform_Dimensions);
 	platform_3.setComponent("texture", movingPlatform_Texture);
 
@@ -272,9 +279,10 @@ int main(int argc, char* argv[])
 	// TODO: Change Dimensions
 	platform_3.setComponent("dimensions", movingPlatform_Dimensions);
 
-	objectList.push_back(&platform_1);
-	objectList.push_back(&platform_2);
-	objectList.push_back(&platform_3);
+	localObjects.push_back(&player);
+	localObjects.push_back(&platform_1);
+	localObjects.push_back(&platform_2);
+	localObjects.push_back(&platform_3);
 
 	// Setting Gravity
 	WorldPhysics::setGravity(gravity);
@@ -300,9 +308,9 @@ int main(int argc, char* argv[])
 		std::cerr << "Client Failed to be created" << std::endl;
 		exit(1);
 	}
+	player.setComponent("client_id", myID);
 
 	myNetwork.startClient("localhost", REQUEST_BASE_PORT + myID, SUBSCRIBE_PORT, objectList, objectMutex);
-	
 
 	//////////////////////////////////////////////////
 	//
@@ -314,7 +322,7 @@ int main(int argc, char* argv[])
 	std::thread netThread(&networking, &myNetwork, &objectList, &objectMutex, &player);
 
 	// Start Rendering Thread
-	std::thread renderThread(&rendering, &objectList, &objectMutex, &player);
+	std::thread renderThread(&rendering, &objectList, &objectMutex, &player, &localObjects);
 
 	std::cout << "Started multi threading" << myID << std::endl;
 
@@ -448,15 +456,15 @@ int main(int argc, char* argv[])
 		//
 		//////////////////////////////////////////////////
 		{
-			// Check if player is not coliding with anything
-			// GameObject *tempMovingPlatform1 = findGameObjectByNpcId(1, objectList);
+			// // Check if player is not coliding with anything
+			GameObject *tempMovingPlatform1 = findGameObjectByNpcId(1, objectList);
 			
-			// if (tempMovingPlatform1) {
-			// 	std::cout << "Collisions" << std::endl;
-			// 	if (!overlappingColliders1(player, platform_1) && !overlappingColliders1(player, *tempMovingPlatform1)) {
-			// 		vel.y += WorldPhysics::getGravity() * d_time;
-			// 	}
-			// }	
+			if (tempMovingPlatform1) {
+				std::cout << "Collisions: " << tempMovingPlatform1->hasComponent("dimensions") << std::endl;				
+				if (!overlappingColliders1(player, platform_1) && !overlappingColliders1(player, *tempMovingPlatform1)) {
+					vel.y += WorldPhysics::getGravity() * d_time;
+				}
+			}	
 		}
 		
 		

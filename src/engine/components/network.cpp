@@ -426,33 +426,6 @@ void NetworkManager::handleHandshakes()
 
         int newClientId = m_nextClientId++;
 
-        {
-            // Lock the master list before adding a new object
-            std::lock_guard<std::mutex> lock(*m_objectListMutex);
-
-            std::cout << "New client connecting. ID: " << newClientId << std::endl;
-            GameObject *newPlayer = new GameObject();
-            newPlayer->setComponent("is_player", true);
-            newPlayer->setComponent("client_id", newClientId);
-
-            // Find a spawn point for the new player
-            GameObject *spawnPoint = findAvailableSpawnPoint(*m_masterObjectList);
-            if (spawnPoint)
-            {
-                newPlayer->setComponent("position", spawnPoint->getComponent<Vector>("position"));
-            }
-            else
-            {
-                // Default spawn if none are found
-                newPlayer->setComponent("position", Vector(0.0f, 0.0f));
-            }
-
-            newPlayer->setComponent("velocity", Vector(0.0f, 0.0f));
-            newPlayer->setComponent("dimensions", Vector(71.0f, 67.0f));
-
-            m_masterObjectList->push_back(newPlayer);
-        }
-
         int newClientPort = m_startReplyPort + newClientId;
         std::cout << "[Network] Allocated reply port " << newClientPort << " for client " << newClientId << std::endl;
         {
@@ -561,12 +534,22 @@ void NetworkManager::readClient(int id, int portNum)
         auto now_local_stats = std::chrono::steady_clock::now();
         auto local_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now_local_stats - local_recv_start).count();
 
+        // Need to make object
         {
             std::lock_guard<std::mutex> lock(*m_objectListMutex);
             GameObject *playerObj = findGameObjectByClientId(id, *m_masterObjectList);
-            if (playerObj)
+            if (playerObj) // Have matching
             {
                 playerObj->setComponent("position", Vector(clientState.x, clientState.y));
+            }
+            else // No existing remote player
+            {
+                playerObj = new GameObject();
+                playerObj->setComponent("is_player", true);
+                playerObj->setComponent("client_id", clientState.clientId);
+                playerObj->setComponent("position", Vector(clientState.x, clientState.y));
+
+                m_masterObjectList->push_back(playerObj);
             }
         }
 
