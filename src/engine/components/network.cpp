@@ -373,7 +373,9 @@ void NetworkManager::update()
         }
     }
 
-    // TODO: Check if code works
+    /////////////////////////////////////////
+    //  Ai Use, ChatGPT: provided the original disconect code and explained different variables and what this was supposed to do, and asked it to re write to actually work
+    /////////////////////////////////////////
     auto it = m_masterObjectList->begin();
     while (it != m_masterObjectList->end())
     {
@@ -399,26 +401,6 @@ void NetworkManager::update()
             ++it;
         }
     }
-
-    // // --- Remove disconnected objects ---
-    // m_masterObjectList->erase(
-    //     std::remove_if(m_masterObjectList->begin(), m_masterObjectList->end(),
-    //                    [&](GameObject *obj)
-    //                    {
-    //                        int id = -1;
-    //                        if (obj->hasComponent("client_id"))
-    //                            id = obj->getComponent<int>("client_id");
-    //                        else if (obj->hasComponent("npc_id"))
-    //                            id = obj->getComponent<int>("npc_id");
-
-    //                        if (id != -1 && activeIds.find(id) == activeIds.end())
-    //                        {
-    //                            delete obj;
-    //                            return true;
-    //                        }
-    //                        return false;
-    //                    }),
-    //     m_masterObjectList->end());
 }
 
 /*

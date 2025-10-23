@@ -136,7 +136,7 @@ void renderObj(GameObject *object, Vector offset) {
 	// Object has no color or texture
 	else {
 		SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
-		SDL_RenderRect(renderer, &rectangle);
+		SDL_RenderFillRect(renderer, &rectangle);
 	}
 }
 
@@ -526,9 +526,7 @@ int main(int argc, char* argv[])
 			// Do we have the remote objects
 			if (movingPlatformHorizontal && movingPlatformVertical) {
 				if (collidable(movingPlatformHorizontal) && collidable(movingPlatformVertical)) {
-					if (overlappingColliders1(player, *movingPlatformHorizontal) || overlappingColliders1(player, *movingPlatformVertical)) {
-						std::cout << "Remote Colliding -------" << std::endl;
-						
+					if (overlappingColliders1(player, *movingPlatformHorizontal) || overlappingColliders1(player, *movingPlatformVertical)) {						
 						// Stop Moving Down
 						if (vel.y > 0) vel.y = 0;
 					}
