@@ -8,20 +8,32 @@
 #include "../headers/timeline.h"
 #include "../headers/Event.h"
 
-void EventManager::ProcessEvents(float currentTimestamp) {
+const EventTypeID CollisionEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("CollisionEvent");
+const EventTypeID InputEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("InputEvent");
+const EventTypeID DeathEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("DeathEvent");
+const EventTypeID SpawnEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("SpawnEvent");
+
+void EventManager::ProcessEvents(float currentTimestamp)
+{
+
+    std::vector<std::shared_ptr<Event>> readyEvents;
+
     // Keep processing events as long as the queue is not empty
-    // AND the top event's timestamp is at or before the current time
-    while (!eventQueue.empty() && eventQueue.top()->timestamp <= currentTimestamp) {
-
-        // 1. Get the event from the queue
-        std::shared_ptr<Event> event = eventQueue.top();
+    // and the top event's timestamp is at or before the current time
+    while (!eventQueue.empty() && eventQueue.top()->timestamp <= currentTimestamp)
+    {
+        readyEvents.push_back(eventQueue.top());
         eventQueue.pop();
+    }
 
-        // 2. Find all listeners for this event type
-        EventType type = event->type;
+    for (const auto& event : readyEvents) {
+
+        // We call the virtual function GetEventTypeID()
+        // instead of accessing a 'type' member.
+        EventTypeID type = event->GetEventTypeID();
+
         if (listeners.find(type) != listeners.end()) {
-
-            // 3. Call each listener's callback function
+            // Call each listener's callback function
             for (const auto& callback : listeners.at(type)) {
                 callback(*event); // Pass the event to the listener
             }
@@ -29,10 +41,12 @@ void EventManager::ProcessEvents(float currentTimestamp) {
     }
 }
 
-void EventManager::QueueEvent(std::shared_ptr<Event> event) {
+void EventManager::QueueEvent(std::shared_ptr<Event> event)
+{
     eventQueue.push(event);
 }
 
-void EventManager::RegisterListener(EventType type, ListenerCallback callback) {
+void EventManager::RegisterListener(EventTypeID type, ListenerCallback callback)
+{
     listeners[type].push_back(callback);
 }

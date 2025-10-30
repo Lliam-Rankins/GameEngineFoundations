@@ -5,66 +5,101 @@
  */
 
 #pragma once
+#include <cstdint>
+#include <string>
+#include <functional>
 
-enum class EventType {
-    Collision,
-    Death,
-    Spawn,
-    Input
-    //TODO add replay stuff
-};
+// We are going to know each event by its ID.
+using EventTypeID = std::uint32_t;
 
 /**
  * Generic event struct - extendable
  */
-struct Event {
-    EventType type;
+struct Event
+{
     // Timeline float value
     float timestamp;
 
-    Event(EventType t, float ts) : type(t), timestamp(ts) {}
+    // No types or parameters
+    Event(float ts) : timestamp(ts) {}
     virtual ~Event() = default;
+
+    virtual EventTypeID GetEventTypeID() const = 0;
 };
+
+/**
+ * Helper function to get EventTypeID from string
+ */
+inline EventTypeID GetEventTypeID(const std::string &name)
+{
+    return std::hash<std::string>{}(name);
+}
 
 /**
  * Collision event struct
  */
-struct CollisionEvent : public Event {
+struct CollisionEvent : public Event
+{
+    static const EventTypeID STATIC_EVENT_TYPE_ID;
+
+    virtual EventTypeID GetEventTypeID() const override
+    {
+        return STATIC_EVENT_TYPE_ID;
+    }
+
     int objectA_ID;
     int objectB_ID;
 
-    CollisionEvent(float ts, int a, int b) 
-        : Event(EventType::Collision, ts), objectA_ID(a), objectB_ID(b) {}
+    CollisionEvent(float ts, int a, int b)
+        : Event(ts), objectA_ID(a), objectB_ID(b) {}
 };
 
 /**
  * Input event struct
  */
-struct InputEvent : public Event {
+struct InputEvent : public Event
+{
+    static const EventTypeID STATIC_EVENT_TYPE_ID;
+    virtual EventTypeID GetEventTypeID() const override
+    {
+        return STATIC_EVENT_TYPE_ID;
+    }
     int action;
     int playerID;
 
-    InputEvent(float ts, int act, int pID) 
-        : Event(EventType::Input, ts), action(act), playerID(pID) {}
+    InputEvent(float ts, int act, int pID)
+        : Event(ts), action(act), playerID(pID) {}
 };
 
 /**
  * Death event struct
  */
-struct DeathEvent : public Event {
+struct DeathEvent : public Event
+{
+    static const EventTypeID STATIC_EVENT_TYPE_ID;
+    virtual EventTypeID GetEventTypeID() const override
+    {
+        return STATIC_EVENT_TYPE_ID;
+    }
     int entityID;
 
-    DeathEvent(float ts, int eID) 
-        : Event(EventType::Death, ts), entityID(eID) {}
+    DeathEvent(float ts, int eID)
+        : Event(ts), entityID(eID) {}
 };
 
 /**
  * Spawn event struct
  */
-struct SpawnEvent : public Event {
+struct SpawnEvent : public Event
+{
+    static const EventTypeID STATIC_EVENT_TYPE_ID;
+    virtual EventTypeID GetEventTypeID() const override
+    {
+        return STATIC_EVENT_TYPE_ID;
+    }
     int entityID;
     float x, y;
 
-    SpawnEvent(float ts, int eID, float posX, float posY) 
-        : Event(EventType::Spawn, ts), entityID(eID), x(posX), y(posY) {}
+    SpawnEvent(float ts, int eID, float posX, float posY)
+        : Event(ts), entityID(eID), x(posX), y(posY) {}
 };

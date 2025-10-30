@@ -26,8 +26,7 @@ class EventManager
 private:
     // A map where the key is the EventType, and the value is a list of
     // all functions (listeners) that care about that type.
-    std::map<EventType, std::vector<ListenerCallback>> listeners;
-
+    std::map<EventTypeID, std::vector<ListenerCallback>> listeners;
     std::priority_queue<
         std::shared_ptr<Event>,
         std::vector<std::shared_ptr<Event>>,
@@ -35,7 +34,7 @@ private:
         eventQueue;
 
 public:
-    void RegisterListener(EventType type, ListenerCallback callback);
+    void RegisterListener(EventTypeID type, ListenerCallback callback);
     void QueueEvent(std::shared_ptr<Event> event);
     void ProcessEvents(float currentTimestamp);
 };
