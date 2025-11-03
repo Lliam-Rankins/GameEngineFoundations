@@ -103,3 +103,49 @@ struct SpawnEvent : public Event
     SpawnEvent(float ts, int eID, float posX, float posY)
         : Event(ts), entityID(eID), x(posX), y(posY) {}
 };
+
+
+/**
+ * Start Recording event struct
+ */
+struct StartRecordingEvent : public Event
+{
+    static const EventTypeID STATIC_EVENT_TYPE_ID;
+    virtual EventTypeID GetEventTypeID() const override
+    {
+        return STATIC_EVENT_TYPE_ID;
+    }
+
+    StartRecordingEvent(float ts, int eID)
+        : Event(ts) {}
+};
+
+/**
+ * Stop Recording event struct
+ */
+struct StopRecordingEvent : public Event
+{
+    static const EventTypeID STATIC_EVENT_TYPE_ID;
+    virtual EventTypeID GetEventTypeID() const override
+    {
+        return STATIC_EVENT_TYPE_ID;
+    }
+
+    StopRecordingEvent(float ts, int eID)
+        : Event(ts) {}
+};
+
+/**
+ * Start Playback event struct
+ */
+struct StartPlaybackEvent : public Event
+{
+    static const EventTypeID STATIC_EVENT_TYPE_ID;
+    virtual EventTypeID GetEventTypeID() const override
+    {
+        return STATIC_EVENT_TYPE_ID;
+    }
+
+    StartPlaybackEvent(float ts, int eID)
+        : Event(ts) {}
+};
