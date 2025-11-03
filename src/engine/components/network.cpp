@@ -28,7 +28,7 @@ NetworkManager::~NetworkManager()
 }
 
 // Helper function to find a GameObject in the master list by its network ID.
-GameObject *findLocalObject(int objectId, const std::vector<GameObject *> &objectList)
+GameObject *NetworkManager::findLocalObject(int objectId, const std::vector<GameObject *> &objectList)
 {
     for (GameObject *obj : objectList)
     {

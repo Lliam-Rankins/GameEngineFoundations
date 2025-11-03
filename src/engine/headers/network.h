@@ -85,6 +85,8 @@ public:
 
     void updateNpcState(const NPCState &npcState);
 
+    GameObject *findLocalObject(int objectId, const std::vector<GameObject *> &objectList);
+
 private:
     // Enum to track whether we are a server, a client, or uninitialized.
     enum class Role

@@ -3,7 +3,7 @@
  * This citation is to abide by the syllabus requirement that "appropriate citations"
  * must be given when referring to external sources. More information is available upon request.
  */
-
+#pragma once
 #include <functional>
 #include <map>
 #include <vector>
