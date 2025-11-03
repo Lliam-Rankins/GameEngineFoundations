@@ -17,12 +17,20 @@ union Data {
     bool b;
 };
 
+struct NetworkEvent {
+    int type;
+    int action;
+    int id1;
+    int id2;
+    float timestamp;
+}
+
 // Data for a single player. Sent from Client -> Server.
 struct PlayerState {
     int clientId = -1; // A unique ID for this player.
     float x = 0.0f;
     float y = 0.0f;
-    std::vector<std::shared_ptr<Event>> events;
+    NetworkEvent events[32];
 };
 
 // State of a non-player (server-controlled) character
@@ -37,8 +45,9 @@ struct NPCState {
 // Complete data for the whole game world. Sent from Server -> all Clients.
 struct GameState {
     int num_clients = 0;
+    int num_events = 0;
     std::vector<PlayerState> players;
-    std::vector<std::shared_ptr<Event>> eventList;
+    std::vector<NetworkEvent> eventList;
     NPCState npcs[MAX_NPCS];
 };
 

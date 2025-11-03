@@ -55,11 +55,14 @@ GameObject *NetworkManager::findLocalObject(int objectId, const std::vector<Game
  * @param publishPort the publish port #
  */
 bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout,
-                                 std::vector<GameObject *> &objectList, std::mutex &objectMutex)
+                                 std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::vector<std::shared_ptr<Event>>> &eventList,
+                                std::mutex &eventMutex)
 {
 
     m_masterObjectList = &objectList;
     m_objectListMutex = &objectMutex;
+    m_masterEventList = &eventList;
+    m_eventListMutex = &eventMutex;
 
     // Create the context and store it in the member variable
     m_context = std::make_unique<zmq::context_t>(1);
@@ -118,7 +121,8 @@ bool NetworkManager::startServer(int startReplyPort, int publishPort, int handsh
  * @param subscribePort the subscribe port #
  */
 bool NetworkManager::startClient(const std::string &serverAddress, int requestPort, int subscribePort,
-                                 std::vector<GameObject *> &objectList, std::mutex &objectMutex)
+                                 std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::vector<std::shared_ptr<Event>>> &eventList,
+                                std::mutex &eventMutex)
 {
     // Create the context
     m_context = std::make_unique<zmq::context_t>(1);
@@ -126,6 +130,8 @@ bool NetworkManager::startClient(const std::string &serverAddress, int requestPo
     // New object stuff
     m_masterObjectList = &objectList;
     m_objectListMutex = &objectMutex;
+    m_masterEventList = &eventList;
+    m_eventListMutex = &eventMutex;
 
     // Create the subscribe socket
     m_subscribeSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::sub);
@@ -555,6 +561,12 @@ void NetworkManager::readClient(int id, int portNum)
                 playerObj->setComponent("position", Vector(clientState.x, clientState.y));
             }
         }
+        {
+            std::lock_guard<std::mutex> lock(*m_eventListMutex);
+            for(int i = 0; i < 32; i++) {
+                m_masterEventList.push_back(clientState.events[i]);
+            }
+        }
 
         // Send the simple acknowledgment but avoid logging it per message
         clientRep.send(zmq::buffer(""));
@@ -604,11 +616,22 @@ void NetworkManager::messageLooper()
             }
             state_to_send.num_clients = state_to_send.players.size();
         }
+        {
+            std::lock_guard<std::mutex> lock(*m_eventListMutex);
+            for (const auto &event : *m_masterEventList) {
+                state_to_send.eventList.push_back(event);
+                state_to_send.num_events++;
+            }
+            *m_masterEventList->clear();
+
+        }
 
         const size_t num_players = state_to_send.players.size();
+        const size_t num_events = state_to_send.eventList.size();
         const size_t players_data_size = num_players * sizeof(PlayerState);
+        const size_t events_data_size = num_events * sizeof(std::shared_ptr<Event>);
         const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
-        const size_t total_size = sizeof(uint64_t) + sizeof(size_t) + players_data_size + npc_data_size;
+        const size_t total_size = sizeof(uint64_t) + sizeof(size_t) + players_data_size + npc_data_size + events_data_size;
 
         if (reuse_buf.size() < total_size)
             reuse_buf.resize(total_size);
@@ -629,12 +652,17 @@ void NetworkManager::messageLooper()
 
         memcpy(buffer, &num_players, sizeof(size_t));
         buffer += sizeof(size_t);
+        if(num_events > 0) {
+            memcpy(buffer, state_to_send.eventList.data(), events_data_size);
+            buffer += events_data_size;
+        }
         if (num_players > 0)
         {
             memcpy(buffer, state_to_send.players.data(), players_data_size);
             buffer += players_data_size;
         }
         memcpy(buffer, &state_to_send.npcs, npc_data_size);
+
 
         bool send_ok = false;
         auto send_start = std::chrono::steady_clock::now();
