@@ -5,6 +5,7 @@
 #include <memory>
 #include <queue>
 #include <mutex>
+#include <thread>
 #include "../headers/Event.h"
 #include "../headers/GameObject.h"
 #include "../headers/EventManager.h"
@@ -12,10 +13,11 @@
 class RecordingManager : public EventManager {
     public:
         // Constructor to get access to the master object list
-        RecordingManager(std::vector<GameObject *> *m_masterObjectList, std::mutex *m_objectListMutex, std::vector<std::vector<std::shared_ptr<Event>>> &eventList,
-                        std::mutex &eventMutex);
-        
-        // On Event, calls other functions
+        RecordingManager(std::vector<GameObject *> *masterList, 
+                         std::mutex *mutex, 
+                         void (*renderObjectFunction)(GameObject *, Vector));
+
+        // Event Handling
         void onEvent(const Event &);
 		
         // Recording Controls
@@ -28,12 +30,17 @@ class RecordingManager : public EventManager {
 
 
     private:
+        // Pointers to outside game state
         std::vector<GameObject *> *m_masterObjectList;
+        std::mutex *m_objectListMutex;
         
         // Local Copys for recording
-        std::vector<GameObject *> *savedGameState;
-        std::priority_queue<std::shared_ptr<Event>, CompareEvent>
-            recordedEventQueue;
+        std::queue<std::vector<GameObject *>> savedGameStates;
 
-        bool recording = false;
+        bool *recording;
+        bool isRecording = true;
+        bool notRecording = false;
+
+        // Render Obj function, takes a game object ptr and an offset vector
+        void (*render_func)(GameObject *, Vector);
 };
