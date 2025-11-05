@@ -55,14 +55,11 @@ GameObject *NetworkManager::findLocalObject(int objectId, const std::vector<Game
  * @param publishPort the publish port #
  */
 bool NetworkManager::startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout,
-                                 std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::vector<std::shared_ptr<Event>>> &eventList,
-                                std::mutex &eventMutex)
+                                 std::vector<GameObject *> &objectList, std::mutex &objectMutex)
 {
 
     m_masterObjectList = &objectList;
     m_objectListMutex = &objectMutex;
-    m_masterEventList = &eventList;
-    m_eventListMutex = &eventMutex;
 
     // Create the context and store it in the member variable
     m_context = std::make_unique<zmq::context_t>(1);
@@ -121,8 +118,8 @@ bool NetworkManager::startServer(int startReplyPort, int publishPort, int handsh
  * @param subscribePort the subscribe port #
  */
 bool NetworkManager::startClient(const std::string &serverAddress, int requestPort, int subscribePort,
-                                 std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::vector<std::shared_ptr<Event>>> &eventList,
-                                std::mutex &eventMutex)
+                     std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::shared_ptr<Event>> &eventList,
+                    std::mutex &eventMutex)
 {
     // Create the context
     m_context = std::make_unique<zmq::context_t>(1);
@@ -301,7 +298,22 @@ void NetworkManager::update()
         buffer += num_players * sizeof(PlayerState);
     }
     memcpy(&newState.npcs, buffer, sizeof(NPCState) * MAX_NPCS);
+    buffer += sizeof(NPCState) * MAX_NPCS;
 
+    size_t num_events = 0;
+    memcpy(&num_events, buffer, sizeof(size_t));
+    buffer += sizeof(size_t);
+    newState.num_events = static_cast<int>(num_events);
+
+    if(num_events > 0) {
+        newState.eventList.resize(num_events);
+        memcpy(newState.eventList.data(), buffer, num_events * sizeof(NetworkEvent));
+        buffer += num_events * sizeof(NetworkEvent);
+    }
+
+    if(!m_masterEventList || !m_eventListMutex) return;
+
+    
 
     if (!m_masterObjectList || !m_objectListMutex)
         return;
@@ -365,6 +377,36 @@ void NetworkManager::update()
         }
     }
 
+    // --- Process Events ---
+
+    {
+        std::lock_guard<std::mutex> lock(*m_eventListMutex);
+        if(num_events > 0) {
+            for(int i = 0; i < num_events; i++) {
+                NetworkEvent event = newState.eventList[i];
+
+                // Type 0 == Collision
+                if(newState.eventList[i].type == 0) {
+                    auto collisionEvent = std::make_shared<CollisionEvent>(event.timestamp, event.id1, event.id2);
+                    m_masterEventList->push_back(collisionEvent);
+                // Type 1 == Input
+                } else if(newState.eventList[i].type == 1) {
+                    auto inputEvent = std::make_shared<InputEvent>(event.timestamp, event.action, event.id1);
+                    m_masterEventList->push_back(inputEvent);
+                // Type 2 == Death
+                } else if(newState.eventList[i].type == 2) {
+                    auto deathEvent = std::make_shared<DeathEvent>(event.timestamp, event.id1);
+                    m_masterEventList->push_back(deathEvent);
+                // Type 3 == Spawn
+                } else if(newState.eventList[i].type == 3) {
+                    auto spawnEvent = std::make_shared<SpawnEvent>(event.timestamp, event.id1, event.x, event.y);
+                    m_masterEventList->push_back(spawnEvent);
+                }
+                
+            }
+        }
+    }
+
     // --- Remove disconnected objects ---
     m_masterObjectList->erase(
         std::remove_if(m_masterObjectList->begin(), m_masterObjectList->end(),
@@ -395,6 +437,7 @@ void NetworkManager::update()
  */
 std::optional<GameState> NetworkManager::getLatestGameState()
 {
+    std::lock_guard<std::mutex> lock(m_gameStateMut);
     // If we haven't received the first broadcast from the server yet,
     // return an empty optional to signify "no data available."
     if (!m_hasReceivedFirstState)
@@ -478,6 +521,8 @@ void NetworkManager::readClient(int id, int portNum)
     clientRep.bind("tcp://*:" + std::to_string(portNum));
     std::cout << "[Network] readClient bound REP socket on port " << portNum << " for client " << id << std::endl;
     auto lastTimeRecv = std::chrono::steady_clock::now();
+    
+    //std::cout << "Made it here 1" << std::endl;
 
     // Find our own thread object in the clients map to detach on exit
     std::thread *self_thread = nullptr;
@@ -488,6 +533,8 @@ void NetworkManager::readClient(int id, int portNum)
             self_thread = &m_clients.at(id).thread;
         }
     }
+
+    //std::cout << "Made it here 2" << std::endl;
 
     while (m_running)
     {
@@ -511,6 +558,9 @@ void NetworkManager::readClient(int id, int portNum)
                     }
                 }
             }
+
+            //std::cout << "Made it here 3" << std::endl;
+
             if (elapsedTimeMs >= m_clientTimeout)
             {
                 std::cout << "Client " << id << " timed out. Disconnecting." << std::endl;
@@ -543,7 +593,10 @@ void NetworkManager::readClient(int id, int portNum)
             continue;
         }
 
+        //std::cout << "Made it here 4" << std::endl;
+
         lastTimeRecv = std::chrono::steady_clock::now();
+        
         PlayerState clientState = *message.data<PlayerState>();
 
         // Rate-limit per-message logging to once per second to avoid console overhead
@@ -560,15 +613,30 @@ void NetworkManager::readClient(int id, int portNum)
             {
                 playerObj->setComponent("position", Vector(clientState.x, clientState.y));
             }
+
+            
         }
+        //std::cout << "Made it here 5" << std::endl;
         {
-            std::lock_guard<std::mutex> lock(*m_eventListMutex);
-            for(int i = 0; i < 32; i++) {
-                m_masterEventList.push_back(clientState.events[i]);
+            // std::cout << "Made it here 5.1" << std::endl;
+            // std::lock_guard<std::mutex> eventLock(m_gameStateMut);
+            // std::cout << "Made it here 5.2" << std::endl;
+            if(clientState.num_events > 0) {
+                std::cout << clientState.num_events << std::endl;
             }
+            for(int i = 0; i < clientState.num_events; i++) {
+                //std::cout << "Made it here 5.3" << std::endl;
+                m_gameState.eventList.push_back(clientState.events[i]);
+            }
+            m_gameState.num_events += clientState.num_events;
         }
+        // {
+        //     std::lock_guard<std::mutex> lock(m_gameStateMut);
+            
+        // }
 
         // Send the simple acknowledgment but avoid logging it per message
+        //std::cout << "Made it here 6" << std::endl;
         clientRep.send(zmq::buffer(""));
     }
 }
@@ -587,6 +655,7 @@ void NetworkManager::messageLooper()
 
             // Reserve space for efficiency
             state_to_send.players.reserve(m_clients.size());
+            state_to_send.eventList.reserve(m_gameState.eventList.size());
 
             int npc_idx = 0;
             // Initialize all NPCs to inactive
@@ -615,23 +684,18 @@ void NetworkManager::messageLooper()
                 }
             }
             state_to_send.num_clients = state_to_send.players.size();
-        }
-        {
-            std::lock_guard<std::mutex> lock(*m_eventListMutex);
-            for (const auto &event : *m_masterEventList) {
+            for(const auto &event : m_gameState.eventList) {
                 state_to_send.eventList.push_back(event);
-                state_to_send.num_events++;
             }
-            *m_masterEventList->clear();
-
+            state_to_send.num_events = m_gameState.eventList.size();
         }
 
         const size_t num_players = state_to_send.players.size();
-        const size_t num_events = state_to_send.eventList.size();
         const size_t players_data_size = num_players * sizeof(PlayerState);
-        const size_t events_data_size = num_events * sizeof(std::shared_ptr<Event>);
         const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
-        const size_t total_size = sizeof(uint64_t) + sizeof(size_t) + players_data_size + npc_data_size + events_data_size;
+        const size_t num_events = state_to_send.eventList.size();
+        const size_t event_data_size = num_events * sizeof(NetworkEvent);
+        const size_t total_size = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(size_t) + players_data_size + npc_data_size + sizeof(size_t) + event_data_size;
 
         if (reuse_buf.size() < total_size)
             reuse_buf.resize(total_size);
@@ -652,10 +716,6 @@ void NetworkManager::messageLooper()
 
         memcpy(buffer, &num_players, sizeof(size_t));
         buffer += sizeof(size_t);
-        if(num_events > 0) {
-            memcpy(buffer, state_to_send.eventList.data(), events_data_size);
-            buffer += events_data_size;
-        }
         if (num_players > 0)
         {
             memcpy(buffer, state_to_send.players.data(), players_data_size);
@@ -663,6 +723,12 @@ void NetworkManager::messageLooper()
         }
         memcpy(buffer, &state_to_send.npcs, npc_data_size);
 
+        memcpy(buffer, &state_to_send.num_events, sizeof(size_t));
+        buffer += sizeof(size_t);
+        if(num_events > 0) {
+            memcpy(buffer, state_to_send.eventList.data(), event_data_size);
+            buffer += event_data_size;
+        }
 
         bool send_ok = false;
         auto send_start = std::chrono::steady_clock::now();
