@@ -16,7 +16,6 @@
 #include <chrono>
 #include <vector>
 #include "GameObject.h"
-#include "Event.h"
 #include <chrono>
 #include <vector> // <-- ADD THIS
 #include "GameObject.h"
@@ -43,8 +42,7 @@ public:
      * @param objectMutex is the mutex to protect the server's master list of GameObjects
      */
     bool startServer(int startReplyPort, int publishPort, int handshakePort, int clientTimeout,
-                     std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::vector<std::shared_ptr<Event>>> &eventList,
-                    std::mutex &eventMutex);
+                     std::vector<GameObject *> &objectList, std::mutex &objectMutex);
     /**
      * Starts the client and connects to the server address at the port given.
      * -- Run this after connectAndHandshake to generate a unique requestPort using the returned id
@@ -54,8 +52,7 @@ public:
      * @return whether or not the client was successfully started
      */
     bool startClient(const std::string &serverAddress, int requestPort, int subscribePort,
-                     std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::vector<std::shared_ptr<Event>>> &eventList,
-                    std::mutex &eventMutex);
+                     std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::shared_ptr<Event>> &clientEventList, std::mutex &eventListMutex);
 
     /**
      * Closes connections, contexts, and threads.
@@ -93,8 +90,6 @@ public:
 
     void updateNpcState(const NPCState &npcState);
 
-    GameObject *findLocalObject(int objectId, const std::vector<GameObject *> &objectList);
-
 private:
     // Enum to track whether we are a server, a client, or uninitialized.
     enum class Role
@@ -116,14 +111,14 @@ private:
 
     std::map<int, ClientConnection> m_clients;
     std::mutex m_clientsMutex;
-    // std::mutex m_gameStateMut;
     std::map<int, PlayerState> m_playerStates;
     std::mutex m_playerStatesMutex;
     std::vector<GameObject *> *m_masterObjectList;
     std::mutex *m_objectListMutex;
-    std::vector<std::vector<std::shared_ptr<Event>>> *m_masterEventList;
+    std::vector<std::shared_ptr<Event>> *m_masterEventList;
     std::mutex *m_eventListMutex;
-
+    
+    
     Role m_role;
 
     // The server's threads
@@ -168,6 +163,14 @@ private:
         Thread function ran by one server thread to continuously send out gameState updates to all clients.
     */
     void messageLooper();
+
+    /**
+        Called by server in order to add an array of NetworkEvents representing recently processed Events to m_gameState, which then gets sent out
+        to clients;
+        @param serverEvents is the array of NetworkEvents to add to the m_gameState.eventList
+        @param eventCt is the number of events getting added to the eventList
+    */
+    void sendServerEvents(NetworkEvent serverEvents[], int eventCt);
 
     /**
         Thread function, one for each client, in which the server makes a thread to loop through this function in order to check for new client messages/updates.
