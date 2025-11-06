@@ -3,6 +3,9 @@
 
 #include <vector>
 #include "../headers/struct.h"
+#include "../headers/Event.h"
+#include "../headers/EventManager.h"
+
 
 const int MAX_NPCS = 16;
 
@@ -14,12 +17,20 @@ union Data {
     bool b;
 };
 
+struct NetworkEvent {
+    int type;
+    int action;
+    int id1;
+    int id2;
+    float timestamp;
+}
+
 // Data for a single player. Sent from Client -> Server.
 struct PlayerState {
     int clientId = -1; // A unique ID for this player.
     float x = 0.0f;
     float y = 0.0f;
-    Data dataArr[8];
+    NetworkEvent events[32];
 };
 
 // State of a non-player (server-controlled) character
@@ -28,14 +39,17 @@ struct NPCState {
     int objectId;
     float x;
     float y;
-    Data dataArr[4];
 };
+
 
 // Complete data for the whole game world. Sent from Server -> all Clients.
 struct GameState {
     int num_clients = 0;
-    std::vector<PlayerState> players; // 
+    int num_events = 0;
+    std::vector<PlayerState> players;
+    std::vector<NetworkEvent> eventList;
     NPCState npcs[MAX_NPCS];
 };
+
 
 
