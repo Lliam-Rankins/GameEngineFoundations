@@ -14,8 +14,6 @@
 #include <chrono>
 #include <vector>
 #include "GameObject.h"
-#include "Event.h"
-#include "EventManager.h"
 
 namespace zmq
 {
@@ -49,8 +47,7 @@ public:
      * @return whether or not the client was successfully started
      */
     bool startClient(const std::string &serverAddress, int requestPort, int subscribePort,
-                     std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::shared_ptr<Event>> &eventList,
-                    std::mutex &eventMutex);
+                     std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::shared_ptr<Event>> &clientEventList, std::mutex &eventListMutex);
 
     /**
      * Closes connections, contexts, and threads.
@@ -88,8 +85,6 @@ public:
 
     void updateNpcState(const NPCState &npcState);
 
-    GameObject *findLocalObject(int objectId, const std::vector<GameObject *> &objectList);
-
 private:
     // Enum to track whether we are a server, a client, or uninitialized.
     enum class Role
@@ -111,14 +106,14 @@ private:
 
     std::map<int, ClientConnection> m_clients;
     std::mutex m_clientsMutex;
-    //std::mutex m_gameStateMut;
     std::map<int, PlayerState> m_playerStates;
     std::mutex m_playerStatesMutex;
     std::vector<GameObject *> *m_masterObjectList;
     std::mutex *m_objectListMutex;
-    std::vector<std::shared_ptr<Event>>* m_masterEventList;
+    std::vector<std::shared_ptr<Event>> *m_masterEventList;
     std::mutex *m_eventListMutex;
-
+    
+    
     Role m_role;
 
     // The server's threads
