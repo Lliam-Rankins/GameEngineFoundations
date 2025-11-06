@@ -160,6 +160,14 @@ private:
     void messageLooper();
 
     /**
+        Called by server in order to add an array of NetworkEvents representing recently processed Events to m_gameState, which then gets sent out
+        to clients;
+        @param serverEvents is the array of NetworkEvents to add to the m_gameState.eventList
+        @param eventCt is the number of events getting added to the eventList
+    */
+    void sendServerEvents(NetworkEvent serverEvents[], int eventCt);
+
+    /**
         Thread function, one for each client, in which the server makes a thread to loop through this function in order to check for new client messages/updates.
         @param id is the client's id
         @param portNum is the port number to be connected at

@@ -610,6 +610,14 @@ void NetworkManager::readClient(int id, int portNum)
     }
 }
 
+void NetworkManager::sendServerEvents(NetworkEvent serverEvents[], int eventCt) {
+    std::lock_guard<std::mutex> lock (m_gameStateMut);
+    for(int i = 0; i < eventCt; i++) {
+        m_gameState.eventList.push_back(serverEvents[i]);
+        m_gameState.num_events++;
+    }
+}
+
 void NetworkManager::messageLooper()
 {
     // Reusable serialization buffer to avoid per-tick allocations.
