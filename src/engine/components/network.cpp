@@ -56,28 +56,6 @@ GameObject *findLocalObject(int objectId, const std::vector<GameObject *> &objec
     return nullptr; // Not found
 }
 
-// Helper function to find a GameObject in the master list by its network ID.
-GameObject *NetworkManager::findLocalObject(int objectId, const std::vector<GameObject *> &objectList)
-{
-    for (GameObject *obj : objectList)
-    {
-        int id = -1;
-        if (obj->hasComponent("client_id"))
-        {
-            id = obj->getComponent<int>("client_id");
-        }
-        else if (obj->hasComponent("npc_id"))
-        {
-            id = obj->getComponent<int>("npc_id");
-        }
-        if (id == objectId)
-        {
-            return obj;
-        }
-    }
-    return nullptr; // Not found
-}
-
 /**
  * Starts the server.
  * @param replyPort the reply port

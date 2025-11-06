@@ -31,7 +31,24 @@ const float SCREEN_H = 1080.0f;
 const float WORLD_WIDTH = 10000.0f;
 const float WORLD_HEIGHT = 8000.0f;
 
-// We now pass pointers to the object list and mutex so this thread can find the player
+const int ACTION_MOVE_LEFT = 1;
+const int ACTION_MOVE_RIGHT = 2;
+const int ACTION_JUMP = 3;
+const int ACTION_STOP_X = 4;
+
+std::vector<std::shared_ptr<Event>> clientOutboxList;
+std::mutex clientOutboxMutex;
+std::vector<GameObject *> clientObjectList;
+std::mutex clientObjectListMutex;
+std::vector<std::shared_ptr<Event>> clientEventList;
+std::mutex eventListMutex;
+NetworkEvent outgoingEvents[32];
+int numOutgoingEvents = 0;
+std::mutex outgoingEventsMutex;
+
+/**
+ * Runs the client network thread
+ */
 void client_network_thread(bool *running, NetworkManager *netManager, std::vector<GameObject *> *objectList, std::mutex *objectMutex, int clientId)
 {
 	Timeline networkTimeline;
@@ -79,6 +96,99 @@ void client_network_thread(bool *running, NetworkManager *netManager, std::vecto
 	}
 }
 
+void sendPlayerThread(bool *running, NetworkManager *network, std::vector<GameObject *> *list, std::mutex *mut, NetworkEvent *localEvents, int *numEvents, std::mutex *eventMut, int id)
+{
+	// While the game is running...
+	while (*running)
+	{
+		// Get this player...
+		GameObject *myPlayer = nullptr;
+		{
+			// Lock it all down
+			std::lock_guard<std::mutex> lock(*mut);
+			myPlayer = findGameObjectByClientId(id, *list);
+		}
+		// If I couldn't get the player,  restart
+		if (!myPlayer)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(16));
+			continue;
+		}
+		// Create a PlayerState based on current player data and send it out
+		PlayerState playerState;
+		playerState.clientId = id;
+		playerState.x = myPlayer->getComponent<Vector>("position").x;
+		playerState.y = myPlayer->getComponent<Vector>("position").y;
+
+		{
+			std::lock_guard<std::mutex> lock2(*eventMut);
+			playerState.num_events = (*numEvents);
+			for (int i = 0; i < playerState.num_events; i++)
+			{
+				playerState.events[i] = localEvents[i];
+			}
+			// std::cout << "Num Local Events: " << (*numEvents) << std::endl;
+			(*numEvents) = 0;
+		}
+		network->sendPlayerState(playerState);
+		std::this_thread::sleep_for(std::chrono::milliseconds(16));
+	}
+}
+
+/**
+ * Helper function to queue and record events
+ */
+void QueueAndRecordEvent(
+	std::shared_ptr<Event> event,
+	EventManager &eventManager,
+	NetworkEvent *outbox,
+	int *outboxCount,
+	std::mutex &outboxMutex,
+	bool isPlayingReplay)
+{
+	// Don't process new events while playing back a replay
+	if (isPlayingReplay)
+	{
+		return;
+	}
+
+	// 1. Queue the event locally (so our own client reacts)
+	eventManager.QueueEvent(event);
+
+	// 2. Check if it's an event we need to send to the server
+	EventTypeID type = event->GetEventTypeID();
+	bool shouldSend = (type == InputEvent::STATIC_EVENT_TYPE_ID ||
+					   type == DeathEvent::STATIC_EVENT_TYPE_ID);
+
+	if (shouldSend)
+	{
+		NetworkEvent netEvent;
+		netEvent.timestamp = event->timestamp;
+
+		if (type == InputEvent::STATIC_EVENT_TYPE_ID)
+		{
+			auto input = static_cast<InputEvent *>(event.get());
+			netEvent.type = 3; // Corresponds to InputEvent (from protocol.h)
+			netEvent.action = input->action;
+			netEvent.id1 = input->playerID;
+		}
+		else if (type == DeathEvent::STATIC_EVENT_TYPE_ID)
+		{
+			auto death = static_cast<DeathEvent *>(event.get());
+			netEvent.type = 1; // Corresponds to DeathEvent (from protocol.h)
+			netEvent.id1 = death->entityID;
+		}
+
+		// --- ADD TO OUTBOX (Thread-Safe) ---
+		std::lock_guard<std::mutex> lock(outboxMutex);
+		if (*outboxCount < 32)
+		{ // Don't overflow the buffer
+			outbox[*outboxCount] = netEvent;
+			(*outboxCount)++;
+		}
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	initializeSDL();
@@ -98,45 +208,41 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	std::vector<GameObject *> clientObjectList;
-	std::mutex clientObjectListMutex;
-
 	NetworkManager networkManager;
 	const int HANDSHAKE_PORT = 5557;
 	const int SUBSCRIBE_PORT = 5556;
 	int myRequestPort;
 
 	// --- START REPLACEMENT ---
-    int myClientId = -1;
-    const int MAX_RETRIES = 10; // Try for 10 seconds
-    int retries = 0;
-    
-    std::cout << "[Client] Started. Attempting to connect to server..." << std::endl;
+	int myClientId = -1;
+	const int MAX_RETRIES = 10; // Try for 10 seconds
+	int retries = 0;
 
-    // Keep trying to connect until we succeed or run out of retries
-    while (myClientId == -1 && retries < MAX_RETRIES)
-    {
-        // This will print "Sent handshake..." from inside your network code
-        myClientId = networkManager.connectAndHandshake("localhost", HANDSHAKE_PORT, myRequestPort);
-        
-        if (myClientId == -1)
-        {
-            retries++;
-            std::cerr << "[Client] Connection attempt " << retries << " failed. Retrying in 1 second..." << std::endl;
-            // Wait 1 second before trying again
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-    }
+	std::cout << "[Client] Started. Attempting to connect to server..." << std::endl;
 
-    // If we still failed after all retries, then we give up.
-    if (myClientId == -1)
-    {
-        std::cerr << "[Client] FAILED to connect to server after " << MAX_RETRIES << " attempts." << std::endl;
-        return 1; // Now it's a real failure
-    }
-    
-    std::cout << "[Client] Successfully connected with Client ID: " << myClientId << std::endl;
-    // --- END REPLACEMENT ---
+	// Keep trying to connect until we succeed or run out of retries
+	while (myClientId == -1 && retries < MAX_RETRIES)
+	{
+		// This will print "Sent handshake..." from inside your network code
+		myClientId = networkManager.connectAndHandshake("localhost", HANDSHAKE_PORT, myRequestPort);
+
+		if (myClientId == -1)
+		{
+			retries++;
+			std::cerr << "[Client] Connection attempt " << retries << " failed. Retrying in 1 second..." << std::endl;
+			// Wait 1 second before trying again
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+		}
+	}
+
+	// If we still failed after all retries, then we give up.
+	if (myClientId == -1)
+	{
+		std::cerr << "[Client] FAILED to connect to server after " << MAX_RETRIES << " attempts." << std::endl;
+		return 1; // Now it's a real failure
+	}
+
+	std::cout << "[Client] Successfully connected with Client ID: " << myClientId << std::endl;
 
 	if (myClientId == -1)
 	{
@@ -144,7 +250,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	networkManager.startClient("localhost", myRequestPort, SUBSCRIBE_PORT, clientObjectList, clientObjectListMutex);
+	networkManager.startClient("localhost", myRequestPort, SUBSCRIBE_PORT, clientObjectList, clientObjectListMutex, clientEventList, eventListMutex);
 	networkManager.setClientId(myClientId);
 	{
 		GameObject *platform = new GameObject();
@@ -228,9 +334,96 @@ int main(int argc, char *argv[])
 	bool running = true;
 	bool cameraInitialized = false;
 	SDL_Event event;
+	EventManager eventManager;
 
-	// We now pass the object list and mutex to the network thread
-	std::thread networkThread(client_network_thread, &running, &networkManager, &clientObjectList, &clientObjectListMutex, myClientId);
+	eventManager.RegisterListener(CollisionEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e)
+								  {
+									  const auto &collision = static_cast<const CollisionEvent &>(e);
+									  {
+										  if (collision.objectB_ID == -1 || collision.objectB_ID == -2 || collision.objectB_ID == -3 || collision.objectB_ID == -4)
+										  {
+											  localPlayer->setComponent("velocity", Vector{localPlayer->getComponent<Vector>("velocity").x, 0});
+										  }
+									  }
+									  // TODO: More collision stuff?
+								  });
+
+	// Find this listener:
+	eventManager.RegisterListener(DeathEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e)
+								  {
+									  const auto &death = static_cast<const DeathEvent &>(e);
+
+									  // Only process if it's our player
+									  if (localPlayer && death.entityID == myClientId)
+									  {
+										  std::cout << "Handling DeathEvent for player " << myClientId << std::endl;
+
+										  // Find the default spawn point (e.g., spawn_id 1)
+										  // You can make this logic more complex (e.g., find closest)
+										  Vector respawnPos = {1920 / 2.0f, 1080 / 2.0f - 50.0f}; // Default
+										  bool spawnFound = false;
+										  for (auto &spObj : clientObjectList)
+										  {
+											  if (spObj->hasComponent("is_spawnpoint") && spObj->getComponent<int>("spawn_id") == 1)
+											  {
+												  respawnPos = spObj->getComponent<Vector>("position");
+												  spawnFound = true;
+												  break;
+											  }
+										  }
+
+										  // Create and queue a SpawnEvent
+										  auto spawn = std::make_shared<SpawnEvent>(
+											  mainTimeline.getDeltaTime(), // Or getCurrentTime()
+											  myClientId,
+											  respawnPos.x,
+											  respawnPos.y);
+											  QueueAndRecordEvent(spawn, eventManager, clientOutboxList, clientOutboxMutex);
+									  } });
+
+	eventManager.RegisterListener(SpawnEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e)
+								  {
+		const auto &spawn = static_cast<const SpawnEvent &>(e);
+		localPlayer->setComponent("position", Vector{spawn.x, spawn.y}); });
+
+	// Find this listener:
+	eventManager.RegisterListener(InputEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e)
+								  {
+									  const auto &input = static_cast<const InputEvent &>(e);
+
+									  // Only act on events for our local player
+									  if (!localPlayer || input.playerID != myClientId)
+										  return;
+
+									  Vector currentVel = localPlayer->getComponent<Vector>("velocity");
+
+									  switch (input.action)
+									  {
+									  case ACTION_MOVE_LEFT:
+										  currentVel.x = -300.0f;
+										  break;
+									  case ACTION_MOVE_RIGHT:
+										  currentVel.x = 300.0f;
+										  break;
+									  case ACTION_JUMP:
+										  currentVel.y = -300.0f;
+										  break;
+									  case ACTION_STOP_X:
+										  currentVel.x = 0.0f;
+										  break;
+									  }
+									  localPlayer->setComponent("velocity", currentVel); });
+
+	std::thread networkThread(
+		sendPlayerThread,
+		&running,
+		&networkManager,
+		&clientObjectList,
+		&clientObjectListMutex,
+		outgoingEvents,		  
+		&numOutgoingEvents,	  
+		&outgoingEventsMutex, 
+		myClientId);
 
 	while (running)
 	{
@@ -239,17 +432,75 @@ int main(int argc, char *argv[])
 		if (dt <= 0)
 			continue;
 
-		// frame start
-
 		while (SDL_PollEvent(&event))
 		{
 			if (event.type == SDL_EVENT_QUIT)
 				running = false;
+
+			if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
+			{
+				std::shared_ptr<InputEvent> input = nullptr;
+				float time = mainTimeline.getDeltaTime();
+
+				switch (event.key.scancode)
+				{
+				case SDL_SCANCODE_A:
+					input = std::make_shared<InputEvent>(time, ACTION_MOVE_LEFT, myClientId);
+					break;
+				case SDL_SCANCODE_D:
+					input = std::make_shared<InputEvent>(time, ACTION_MOVE_RIGHT, myClientId);
+					break;
+				case SDL_SCANCODE_SPACE:
+					input = std::make_shared<InputEvent>(time, ACTION_JUMP, myClientId);
+					break;
+				default:
+					break;
+				}
+				if (input)
+				{
+					QueueAndRecordEvent(input, eventManager, outgoingEvents, outgoingEventsMutex, isPlaying);
+				}
+			}
+			else if (event.type == SDL_EVENT_KEY_UP)
+			{
+				std::shared_ptr<InputEvent> input = nullptr;
+				float time = mainTimeline.getDeltaTime();
+
+				switch (event.key.scancode)
+				{
+				case SDL_SCANCODE_A:
+				case SDL_SCANCODE_D:
+					input = std::make_shared<InputEvent>(time, ACTION_STOP_X, myClientId);
+					break;
+				default:
+					break;
+				}
+				if (input)
+				{
+					QueueAndRecordEvent(input, eventManager, clientOutboxList, clientOutboxMutex);
+				}
+			}
 		}
-		if (isKeyPressed(SDL_SCANCODE_ESCAPE))
-			running = false;
 
 		std::lock_guard<std::mutex> lock(clientObjectListMutex);
+
+		{
+			// Lock the *event* list
+			std::lock_guard<std::mutex> eventLock(eventListMutex);
+
+			if (!clientEventList.empty())
+			{
+				std::cout << "Received " << clientEventList.size() << " events from server." << std::endl;
+
+				// Queue all received events into our local EventManager
+				for (const auto &netEvent : clientEventList)
+				{
+					QueueAndRecordEvent(netEvent, eventManager, clientOutboxList, clientOutboxMutex);
+				}
+				// Clear the list now that we've processed them
+				clientEventList.clear();
+			}
+		}
 
 		// --- Link to Local Player ---
 		if (!localPlayer)
@@ -382,6 +633,12 @@ int main(int argc, char *argv[])
 					pvel.y = 0.0f;
 					playerObj->setComponent("position", ppos);
 					playerObj->setComponent("velocity", pvel);
+
+					auto collision = std::make_shared<CollisionEvent>(
+						mainTimeline.getDeltaTime(),			   // Or getCurrentTime()
+						playerObj->getComponent<int>("client_id"), // Assumes player has client_id
+						platObj->getComponent<int>("object_id"));
+					QueueAndRecordEvent(collision, eventManager, clientOutboxList, clientOutboxMutex);
 				}
 			}
 		}
@@ -413,35 +670,19 @@ int main(int argc, char *argv[])
 
 					if (collision)
 					{
-						// Collision detected! Find the linked spawn point
-						int targetSpawnId = dzObj->getComponent<int>("spawn_id");
-						Vector respawnPos;
-						bool spawnFound = false;
-
-						for (auto &spObj : clientObjectList)
-						{
-							if (spObj->hasComponent("is_spawnpoint") && spObj->getComponent<int>("spawn_id") == targetSpawnId)
-							{
-								respawnPos = spObj->getComponent<Vector>("position");
-								spawnFound = true;
-								break;
-							}
-						}
-
-						if (spawnFound)
-						{
-							// Teleport player and reset velocity
-							localPlayer->setComponent("position", respawnPos);
-							localPlayer->setComponent("velocity", Vector(0.0f, 0.0f));
-						}
-
+						std::cout << "Player " << myClientId << " hit death zone." << std::endl;
+						// Create a death event for our player
+						auto death = std::make_shared<DeathEvent>(
+							mainTimeline.getDeltaTime(), // Or getCurrentTime()
+							myClientId);
+						QueueAndRecordEvent(death, eventManager, clientOutboxList, clientOutboxMutex);
 						// Stop checking for other death zones now
 						break;
 					}
 				}
 			}
 		}
-
+		eventManager.ProcessEvents(mainTimeline.getDeltaTime());
 		// Rendering
 		setupScreen(renderer);
 		{
