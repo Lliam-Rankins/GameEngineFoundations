@@ -4,40 +4,7 @@
 #include "../headers/collisions.h"
 
 
-// Vector Collider::getTopLeft() {
-// 	std::unique_lock<std::mutex> cv_lock(colliderMutex);
-// 	return this->topLeft;
-// }
 
-// Vector Collider::getBottomRight() {
-// 	std::unique_lock<std::mutex> cv_lock(colliderMutex);
-// 	return this->bottomRight;
-// }
-
-// void Collider::setTopLeft(Vector newTopLeft) {
-// 	std::unique_lock<std::mutex> cv_lock(colliderMutex);
-// 	this->topLeft = newTopLeft;
-// }
-
-// void Collider::setBottomRight(Vector newBottomRight) {
-// 	std::unique_lock<std::mutex> cv_lock(colliderMutex);
-// 	this->bottomRight = newBottomRight;
-// }
-
-// FIX THIS DOC LATER, this just calculates a collider and returns it, use this when updating pos
-// void updateCollider(GameObject &obj) {
-// 	if(!(obj.hasComponent("Position") && obj.hasComponent("Dimensions"))) {
-// 		std::cout << "Improper object!" << std::endl;
-// 	}
-// 	Vector pos = obj.getComponent<Vector>("Position");
-// 	Vector dim = obj.getComponent<Vector>("Dimensions");
-// 	Collider newCol;
-// 	newCol.topLeft.x = pos.x;
-// 	newCol.topLeft.y = pos.y;
-// 	newCol.bottomLeft.x = pos.x + dim.x;
-// 	newCol.bottomRight.y = pos.y + dim.y;
-// 	obj.setComponent("Collider", newCol);
-// }
 
 
 /**

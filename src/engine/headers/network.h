@@ -50,7 +50,7 @@ public:
      * @return whether or not the client was successfully started
      */
     bool startClient(const std::string &serverAddress, int requestPort, int subscribePort,
-                     std::vector<GameObject *> &objectList, std::mutex &objectMutex);
+                     std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::shared_ptr<Event>> &clientEventList, std::mutex &eventListMutex);
 
     /**
      * Closes connections, contexts, and threads.
@@ -127,11 +127,14 @@ private:
 
     std::map<int, ClientConnection> m_clients;
     std::mutex m_clientsMutex;
-    // std::mutex m_gameStateMut;
     std::map<int, PlayerState> m_playerStates;
     std::mutex m_playerStatesMutex;
     std::vector<GameObject *> *m_masterObjectList;
     std::mutex *m_objectListMutex;
+    std::vector<std::shared_ptr<Event>> *m_masterEventList;
+    std::mutex *m_eventListMutex;
+    
+    
     Role m_role;
 
     // The server's threads
@@ -180,6 +183,14 @@ private:
         Thread function ran by one server thread to continuously send out gameState updates to all clients.
     */
     void messageLooper();
+
+    /**
+        Called by server in order to add an array of NetworkEvents representing recently processed Events to m_gameState, which then gets sent out
+        to clients;
+        @param serverEvents is the array of NetworkEvents to add to the m_gameState.eventList
+        @param eventCt is the number of events getting added to the eventList
+    */
+    void sendServerEvents(NetworkEvent serverEvents[], int eventCt);
 
     /**
         Thread function, one for each client, in which the server makes a thread to loop through this function in order to check for new client messages/updates.

@@ -117,7 +117,7 @@ bool NetworkManager::startServer(int startReplyPort, int publishPort, int handsh
  * @param subscribePort the subscribe port #
  */
 bool NetworkManager::startClient(const std::string &serverAddress, int requestPort, int subscribePort,
-                                 std::vector<GameObject *> &objectList, std::mutex &objectMutex)
+                                 std::vector<GameObject *> &objectList, std::mutex &objectMutex, std::vector<std::shared_ptr<Event>> &clientEventList, std::mutex &eventListMutex)
 {
     // Create the context
     m_context = std::make_unique<zmq::context_t>(1);
@@ -125,6 +125,8 @@ bool NetworkManager::startClient(const std::string &serverAddress, int requestPo
     // New object stuff
     m_masterObjectList = &objectList;
     m_objectListMutex = &objectMutex;
+    m_masterEventList = &clientEventList;
+    m_eventListMutex = &eventListMutex;
 
     // Create the subscribe socket
     m_subscribeSocket = std::make_unique<zmq::socket_t>(*m_context, zmq::socket_type::sub);
@@ -323,6 +325,19 @@ void NetworkManager::update()
         buffer += num_players * sizeof(PlayerState);
     }
     memcpy(&newState.npcs, buffer, sizeof(NPCState) * MAX_NPCS);
+    buffer += sizeof(NPCState) * MAX_NPCS;
+    size_t num_events;
+    memcpy(&num_events, buffer, sizeof(size_t));
+    buffer += sizeof(size_t);
+    if(num_events > 0) {
+        newState.eventList.resize(num_events);
+        memcpy(newState.eventList.data(), buffer, num_events * sizeof(NetworkEvent));
+        buffer += num_events * sizeof(NetworkEvent);
+        //std::cout << newState.eventList[1].type << std::endl;
+    }
+    newState.num_events = num_events;
+    //std::cout << newState.num_events << std::endl;
+    
 
     // accumulate latency stats for this received message
     latency_total_ms += latency_ms;
@@ -407,6 +422,31 @@ void NetworkManager::update()
         {
             // This NPC already exists. Update its network target position for interpolation.
             obj->setComponent("position", Vector(npcState.x, npcState.y));
+        }
+    }
+    // --- Process Events ---
+    {
+        std::lock_guard<std::mutex> lock3(*m_eventListMutex);
+        for(const auto &event : newState.eventList) {
+            if(event.type == -1) continue;
+
+            //std::cout << "Event type: " << event.type << std::endl;
+
+            if(event.type == 1) {
+                auto collisionEvent = std::make_shared<CollisionEvent>(event.timestamp, event.id1, event.id2);
+                m_masterEventList->push_back(collisionEvent);
+            } else if(event.type == 2) {
+                auto inputEvent = std::make_shared<InputEvent>(event.timestamp, event.action, event.id1);
+                m_masterEventList->push_back(inputEvent);
+            } else if(event.type == 3) {
+                auto deathEvent = std::make_shared<DeathEvent>(event.timestamp, event.id1);
+                m_masterEventList->push_back(deathEvent);
+            } else if(event.type == 4) {
+                auto spawnEvent = std::make_shared<SpawnEvent>(event.timestamp, event.id1, event.x, event.y);
+                m_masterEventList->push_back(spawnEvent);
+            }
+
+            std::cout << "Event registered!" << event.type << std::endl;
         }
     }
 
@@ -742,20 +782,27 @@ void NetworkManager::readClient(int id, int portNum)
             }
         }
 
+        {
+            std::lock_guard<std::mutex> lock(m_gameStateMut);
+            m_gameState.num_events += clientState.num_events;
+            std::cout << m_gameState.num_events << std::endl;
+            for(int i = 0; i < clientState.num_events; i++) {
+                m_gameState.eventList.push_back(clientState.events[i]);
+            }
+        }
+
         // Send the simple acknowledgment but avoid logging it per message
         clientRep.send(zmq::buffer(""));
     }
 }
 
-// Add this new function to network.cpp
-void NetworkManager::publishDeltaState(const std::vector<GameObject *> &changedObjects)
-{
-    std::lock_guard<std::mutex> lock(m_deltaMutex);
-    // Copy the pointers from the changed list into our internal delta list
-    // We'll append, in case the server loop is faster than the network loop
-    m_deltaList.insert(m_deltaList.end(), changedObjects.begin(), changedObjects.end());
+void NetworkManager::sendServerEvents(NetworkEvent serverEvents[], int eventCt) {
+    std::lock_guard<std::mutex> lock (m_gameStateMut);
+    for(int i = 0; i < eventCt; i++) {
+        m_gameState.eventList.push_back(serverEvents[i]);
+        m_gameState.num_events++;
+    }
 }
-
 
 void NetworkManager::messageLooper()
 {
@@ -780,13 +827,12 @@ void NetworkManager::messageLooper()
         // =================================================================
         if (currentStrategy == "FullState")
         {
-            GameState state_to_send;
+            std::lock_guard<std::mutex> lock(*m_objectListMutex);
+            std::lock_guard<std::mutex> lock2(m_gameStateMut);
 
-            {
-                std::lock_guard<std::mutex> lock(*m_objectListMutex);
-
-                // Reserve space for efficiency
-                state_to_send.players.reserve(m_clients.size());
+            // Reserve space for efficiency
+            state_to_send.players.reserve(m_clients.size());
+            state_to_send.eventList.reserve(m_gameState.eventList.size());
 
                 int npc_idx = 0;
                 // Initialize all NPCs to inactive
@@ -862,26 +908,54 @@ void NetworkManager::messageLooper()
                     std::cerr << "[Network] 'FullState' send threw zmq::error_t: " << e.what() << std::endl;
                 }
             }
-            catch (const std::exception &e)
-            {
-                std::cerr << "[Network] 'FullState' send threw exception: " << e.what() << std::endl;
+            for(const auto event : m_gameState.eventList) {
+                state_to_send.eventList.push_back(event);
             }
+            state_to_send.num_clients = state_to_send.players.size();
+            state_to_send.num_events = state_to_send.eventList.size();
+
+            m_gameState.num_events = 0;
+            m_gameState.eventList.clear();
         }
-        // =================================================================
-        // --- STRATEGY 2: "DeltaState" (New logic) ---
-        // (Sends ONLY changed NPCs from the m_deltaList)
-        // =================================================================
-        else if (currentStrategy == "DeltaState")
+
+        const size_t num_players = state_to_send.players.size();
+        const size_t players_data_size = num_players * sizeof(PlayerState);
+        const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
+        const size_t num_events = state_to_send.eventList.size();
+        const size_t event_data_size = num_events * sizeof(NetworkEvent);
+        const size_t total_size = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(size_t) + players_data_size + npc_data_size + sizeof(size_t) + event_data_size;
+
+        if (reuse_buf.size() < total_size)
+            reuse_buf.resize(total_size);
+        char *buffer = reuse_buf.data();
+
+        // Write server timestamp first (ms since epoch)
+        uint64_t server_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    std::chrono::system_clock::now().time_since_epoch())
+                                    .count();
+        memcpy(buffer, &server_ts_ms, sizeof(uint64_t));
+        buffer += sizeof(uint64_t);
+
+        // Write sequence number (uint32_t) to detect missed packets on client
+        static uint32_t publish_seq = 0;
+        uint32_t seq = publish_seq++;
+        memcpy(buffer, &seq, sizeof(uint32_t));
+        buffer += sizeof(uint32_t);
+
+        memcpy(buffer, &num_players, sizeof(size_t));
+        buffer += sizeof(size_t);
+        if (num_players > 0)
         {
-            // 1. Get the list of changed objects (deltas) from the "mailbox"
-            std::vector<GameObject *> localDeltaList;
-            {
-                std::lock_guard<std::mutex> lock(m_deltaMutex);
-                // Use swap for O(1) efficiency.
-                // This moves all elements from m_deltaList to localDeltaList
-                // and leaves m_deltaList empty, all within the lock.
-                localDeltaList.swap(m_deltaList);
-            }
+            memcpy(buffer, state_to_send.players.data(), players_data_size);
+            buffer += players_data_size;
+        }
+        memcpy(buffer, &state_to_send.npcs, npc_data_size);
+        buffer += npc_data_size;
+        memcpy(buffer, &num_events, sizeof(size_t));
+        buffer += sizeof(size_t);
+        if(num_events > 0) {
+            memcpy(buffer, state_to_send.eventList.data(), event_data_size);
+        }
 
             // If no deltas, don't send anything
             if (localDeltaList.empty())
@@ -966,7 +1040,7 @@ void NetworkManager::messageLooper()
                 std::cerr << "[Network] 'DeltaState' send threw exception: " << e.what() << std::endl;
             }
         }
-
+        
         // Shared sleep for both strategies
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
@@ -1116,6 +1190,7 @@ void NetworkManager::cleanUp()
     }
     m_isInitialized = false;
     m_role = Role::NONE;
+
 }
 
 
