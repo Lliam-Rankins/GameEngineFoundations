@@ -4,6 +4,7 @@
 #include <atomic>
 #include "struct.h"
 #include "collisions.h"
+#include "mathEngine.h"
 #include <SDL3_image/SDL_image.h>
 #include <iostream>
 

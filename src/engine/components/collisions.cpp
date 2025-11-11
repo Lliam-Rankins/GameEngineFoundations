@@ -70,7 +70,7 @@ bool overlappingColliders2(GameObject& objA, GameObject& objB) {
 	// Check if y values for a and b overlap at all
 	bool overlappingY = false;
 
-	if (a.topLeft.y > b.bottomRight.y && a.bottomRight.y < b.topLeft.y) {
+	if (a.topLeft.y < b.bottomRight.y && a.bottomRight.y > b.topLeft.y) {
 		overlappingY = true;
 	}
 
