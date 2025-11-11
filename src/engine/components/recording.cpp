@@ -3,10 +3,12 @@
 /**
  * Constructor for recording manager
  */
-RecordingManager::RecordingManager(std::vector<GameObject *> *masterList, 
+RecordingManager::RecordingManager(int player_id, Vector defaultOffset, std::vector<GameObject *> *masterList, 
                                    std::mutex *mutex, 
                                    void (*renderFunction)(GameObject *, Vector))
-    : m_masterObjectList(masterList),
+    : player_id(player_id),
+      defaultOffset(defaultOffset),
+      m_masterObjectList(masterList),
       m_objectListMutex(mutex),
       render_func(renderFunction) {}
 
@@ -68,17 +70,30 @@ void RecordingManager :: stopRecording() {
  */
 void RecordingManager :: startPlayback() {
     // Start Playback Thread
-	std::thread playbackThread(&savedGameStates, &render_func);
+	std::thread playbackThread(player_id, defaultOffset, &savedGameStates, &render_func);
 }
 
 
-void playback(std::queue<std::vector<GameObject *>> *savedGameStates, void (*renderObj)(GameObject *, Vector)) {    
+void playback(int player_id, Vector defaultOffset, std::queue<std::vector<GameObject *>> *savedGameStates, void (*renderObj)(GameObject *, Vector)) {    
     // While we have 
     while (!(*savedGameStates).empty()) {
         std::vector<GameObject *> gameState = (*savedGameStates).front();
+
+        Vector cameraOffset = {0, 0};
+        // Find player
+        for (GameObject* object : gameState) {
+            if (object->hasComponent("client_id") && object->getComponent<int>("client_id") == player_id) {
+                // Get their position
+                if (object->hasComponent("position")) {
+                    cameraOffset = object->getComponent<Vector>("position");
+                    break;
+                }
+            }
+        }
+
         (*savedGameStates).pop();
         for (GameObject* object : gameState) {
-            renderObj(object, Vector{0, 0});
+            renderObj(object, cameraOffset);
         }
 
         // Have thread sleep, preserves time
