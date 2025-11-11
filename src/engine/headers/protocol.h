@@ -22,14 +22,17 @@ struct NetworkEvent {
     int action;
     int id1;
     int id2;
+    int x;
+    int y;
     float timestamp;
-}
+};
 
 // Data for a single player. Sent from Client -> Server.
 struct PlayerState {
     int clientId = -1; // A unique ID for this player.
     float x = 0.0f;
     float y = 0.0f;
+    int num_events = 0;
     NetworkEvent events[32];
 };
 
