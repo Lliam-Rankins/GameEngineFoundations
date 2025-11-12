@@ -275,13 +275,18 @@ int main(int argc, char* argv[])
 
 
 	// Instantiate ObjectList
+	std::vector<std::vector<GameObject *> *> masterObjectList;
     std::vector<GameObject *> objectList;
 	std::vector<GameObject *> localObjects;
     std::mutex objectMutex;
 
+	masterObjectList.push_back(&objectList);
+	masterObjectList.push_back(&localObjects);
+
 	// Player
 	GameObject player;
 	player.setComponent("position", player_Position);
+	player.setComponent("is_local_player", true);
 	player.setComponent("is_player", true);
 	player.setComponent("velocity", player_Velocity);
 	player.setComponent("dimensions", player_Dimensions);
@@ -444,7 +449,7 @@ int main(int argc, char* argv[])
 	///////////////////////
 	//	Recording Manager
 	///////////////////////
-	RecordingManager recordingManager(renderer, &eventManager, myID, Vector{0, 0}, &localObjects, &objectMutex, renderObj);
+	RecordingManager recordingManager(renderer, &eventManager, myID, &masterObjectList, &objectMutex, renderObj);
 
 	// Register Recording events
 	eventManager.RegisterListener(StartRecordingEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {

@@ -15,7 +15,7 @@
 class RecordingManager : public EventManager {
     public:
         // Constructor to get access to the master object list
-        RecordingManager(SDL_Renderer *renderer, EventManager *eventManager, int player_id, Vector defaultOffset, std::vector<GameObject *> *masterList, 
+        RecordingManager(SDL_Renderer *renderer, EventManager *eventManager, int player_id, std::vector<std::vector<GameObject *> *> *objectLists, 
                          std::mutex *mutex, 
                          void (*renderObjectFunction) (GameObject *, Vector));
 		
@@ -30,7 +30,7 @@ class RecordingManager : public EventManager {
 
     private:
         // Pointers to outside game state
-        std::vector<GameObject *> *m_masterObjectList;
+        std::vector<std::vector<GameObject *> *> *objectLists;
         std::mutex *m_objectListMutex;
         
         // Local Copys for recording

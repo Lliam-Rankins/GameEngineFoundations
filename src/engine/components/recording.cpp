@@ -3,18 +3,17 @@
 /**
  * Constructor for recording manager
  */
-RecordingManager::RecordingManager(SDL_Renderer *renderer, EventManager *eventManager, int player_id, Vector defaultOffset, std::vector<GameObject *> *masterList, 
+RecordingManager::RecordingManager(SDL_Renderer *renderer, EventManager *eventManager, int player_id, std::vector<std::vector<GameObject *> *> *objectLists, 
                                    std::mutex *mutex, 
                                    void (*renderFunction)(GameObject *, Vector))
     : eventManager(eventManager),
       renderer(renderer),
       player_id(player_id),
-      defaultOffset(defaultOffset),
-      m_masterObjectList(masterList),
+      objectLists(objectLists),
       m_objectListMutex(mutex),
       render_func(renderFunction) {}
 
-void record(bool *recording, std::queue<std::vector<GameObject>> *savedGameStates, std::vector<GameObject *> *m_masterObjectList, std::mutex *m_objectListMutex) {
+void record(bool *recording, std::queue<std::vector<GameObject>> *savedGameStates, std::vector<std::vector<GameObject *> *> *objectLists, std::mutex *m_objectListMutex) {
     int x = 0;
     // While we are recording, push states onto queue
     while (*recording) {
@@ -23,9 +22,10 @@ void record(bool *recording, std::queue<std::vector<GameObject>> *savedGameState
             std::lock_guard<std::mutex> lock(*m_objectListMutex);
             
             std::cout << x << std::endl;
-
-            for (auto* obj : *m_masterObjectList) {
-                frameCopy.push_back(obj->clone());
+            for (size_t i = 0; i < objectLists->size(); ++i) {
+                for (auto* obj : *((*objectLists)[i])) {
+                    frameCopy.push_back(obj->clone());
+                }
             }
 
             savedGameStates->push(std::move(frameCopy));
@@ -48,7 +48,7 @@ void RecordingManager :: startRecording() {
     *recording = true;
 
     // Start Recording Thread
-	std::thread recordingThread(record, recording, &savedGameStates, m_masterObjectList, m_objectListMutex);
+	std::thread recordingThread(record, recording, &savedGameStates, objectLists, m_objectListMutex);
     recordingThread.detach();
 }
 
@@ -84,7 +84,9 @@ void playback(SDL_Renderer *renderer, EventManager *eventManager, int player_id,
         }
 
         for (auto& object : gameState) {
-            renderObj(&object, cameraOffset);
+            if (!object.hasComponent("is_local_player")) {
+                renderObj(&object, cameraOffset);
+            }
         }
 
         // Have thread sleep, preserves time
