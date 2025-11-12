@@ -18,6 +18,8 @@ add_executable(client
     ./src/engine/components/network.cpp
     ./src/engine/components/timeline.cpp
     ./src/engine/components/GameObject.cpp
+    ./src/engine/components/EventManager.cpp
+    ./src/engine/components/recording.cpp
 )
 
 target_compile_definitions(client PRIVATE IS_CLIENT)
@@ -29,15 +31,7 @@ add_executable(server
     ./src/engine/components/timeline.cpp
     ./src/engine/components/mathEngine.cpp
     ./src/engine/components/GameObject.cpp
-)
-
-add_executable(server_testing
-    ./src/game/server_testing.cpp
-    ./src/engine/components/network.cpp
-    ./src/engine/components/entities.cpp
-    ./src/engine/components/timeline.cpp
-    ./src/engine/components/mathEngine.cpp
-    ./src/engine/components/GameObject.cpp
+    ./src/engine/components/EventManager.cpp
 )
 
 set(MEDIA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/media")
@@ -52,7 +46,5 @@ add_custom_command(
 
 target_link_libraries(client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
 target_link_libraries(server PRIVATE cppzmq)
-target_link_libraries(server_testing PRIVATE cppzmq)
-
 
 

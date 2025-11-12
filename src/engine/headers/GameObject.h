@@ -52,4 +52,18 @@ public:
      * @return True if the component exists, false otherwise.
      */
     bool hasComponent(const std::string& key) const;
+
+    /**
+     * AI USE DISCLOSURE
+     * Asked ChatGPT to generate a clone function for the game object class
+     * after providing the game objects header
+     */
+    GameObject clone() const {
+        GameObject copy;
+        for (auto& [key, value] : components) {
+            copy.components[key] = value; // shallow copy of std::variant
+        }
+        return copy;
+    }
+
 };

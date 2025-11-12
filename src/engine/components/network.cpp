@@ -809,121 +809,49 @@ void NetworkManager::messageLooper()
     // Reusable serialization buffer to avoid per-tick allocations.
     std::vector<char> reuse_buf;
 
-    // Shared sequence number for all publish packets
-    static uint32_t publish_seq = 0;
-
     while (m_running)
     {
-        std::string currentStrategy;
-        {
-            // Safely check the current strategy
-            std::lock_guard<std::mutex> lock(m_strategyMutex);
-            currentStrategy = m_strategy;
-        }
+        GameState state_to_send;
 
-        // =================================================================
-        // --- STRATEGY 1: "FullState" (Your original code) ---
-        // (Sends ALL players and ALL NPCs)
-        // =================================================================
-        if (currentStrategy == "FullState")
         {
             std::lock_guard<std::mutex> lock(*m_objectListMutex);
-            std::lock_guard<std::mutex> lock2(m_gameStateMut);
 
             // Reserve space for efficiency
             state_to_send.players.reserve(m_clients.size());
-            state_to_send.eventList.reserve(m_gameState.eventList.size());
 
-                int npc_idx = 0;
-                // Initialize all NPCs to inactive
-                for (int i = 0; i < MAX_NPCS; ++i)
-                    state_to_send.npcs[i].objectId = -1;
+            int npc_idx = 0;
+            // Initialize all NPCs to inactive
+            for (int i = 0; i < MAX_NPCS; ++i)
+                state_to_send.npcs[i].objectId = -1;
 
-                // --- This iterates the *ENTIRE* master list ---
-                for (const auto &obj : *m_masterObjectList)
+            for (const auto &obj : *m_masterObjectList)
+            {
+                if (obj->hasComponent("is_player"))
                 {
-                    if (obj->hasComponent("is_player"))
-                    {
-                        PlayerState p;
-                        p.clientId = obj->getComponent<int>("client_id");
-                        Vector pos = obj->getComponent<Vector>("position");
-                        p.x = pos.x;
-                        p.y = pos.y;
-                        state_to_send.players.push_back(p);
-                    }
-                    else if (obj->hasComponent("is_npc") && npc_idx < MAX_NPCS)
-                    {
-                        NPCState &n = state_to_send.npcs[npc_idx];
-                        n.objectId = obj->getComponent<int>("npc_id");
-                        Vector pos = obj->getComponent<Vector>("position");
-                        n.x = pos.x;
-                        n.y = pos.y;
-                        npc_idx++;
-                    }
+                    PlayerState p;
+                    p.clientId = obj->getComponent<int>("client_id");
+                    Vector pos = obj->getComponent<Vector>("position");
+                    p.x = pos.x;
+                    p.y = pos.y;
+                    state_to_send.players.push_back(p);
                 }
-                state_to_send.num_clients = state_to_send.players.size();
-            }
-
-            const size_t num_players = state_to_send.players.size();
-            const size_t players_data_size = num_players * sizeof(PlayerState);
-            const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
-            // Full state packet size:
-            const size_t total_size = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(size_t) + players_data_size + npc_data_size;
-
-            if (reuse_buf.size() < total_size)
-                reuse_buf.resize(total_size);
-            char *buffer = reuse_buf.data();
-
-            // Write server timestamp
-            uint64_t server_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                        std::chrono::system_clock::now().time_since_epoch())
-                                        .count();
-            memcpy(buffer, &server_ts_ms, sizeof(uint64_t));
-            buffer += sizeof(uint64_t);
-
-            // Write sequence number
-            uint32_t seq = publish_seq++;
-            memcpy(buffer, &seq, sizeof(uint32_t));
-            buffer += sizeof(uint32_t);
-
-            // --- Serialize full state ---
-            memcpy(buffer, &num_players, sizeof(size_t));
-            buffer += sizeof(size_t);
-            if (num_players > 0)
-            {
-                memcpy(buffer, state_to_send.players.data(), players_data_size);
-                buffer += players_data_size;
-            }
-            memcpy(buffer, &state_to_send.npcs, npc_data_size);
-
-            // --- Send full state ---
-            try
-            {
-                auto sent = m_publishSocket->send(zmq::buffer(reuse_buf.data(), total_size), zmq::send_flags::dontwait);
-            }
-            catch (const zmq::error_t &e)
-            {
-                if (e.num() != EAGAIN)
+                else if (obj->hasComponent("is_npc") && npc_idx < MAX_NPCS)
                 {
-                    std::cerr << "[Network] 'FullState' send threw zmq::error_t: " << e.what() << std::endl;
+                    NPCState &n = state_to_send.npcs[npc_idx];
+                    n.objectId = obj->getComponent<int>("npc_id");
+                    Vector pos = obj->getComponent<Vector>("position");
+                    n.x = pos.x;
+                    n.y = pos.y;
+                    npc_idx++;
                 }
-            }
-            for(const auto event : m_gameState.eventList) {
-                state_to_send.eventList.push_back(event);
             }
             state_to_send.num_clients = state_to_send.players.size();
-            state_to_send.num_events = state_to_send.eventList.size();
-
-            m_gameState.num_events = 0;
-            m_gameState.eventList.clear();
         }
 
         const size_t num_players = state_to_send.players.size();
         const size_t players_data_size = num_players * sizeof(PlayerState);
         const size_t npc_data_size = sizeof(NPCState) * MAX_NPCS;
-        const size_t num_events = state_to_send.eventList.size();
-        const size_t event_data_size = num_events * sizeof(NetworkEvent);
-        const size_t total_size = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(size_t) + players_data_size + npc_data_size + sizeof(size_t) + event_data_size;
+        const size_t total_size = sizeof(uint64_t) + sizeof(size_t) + players_data_size + npc_data_size;
 
         if (reuse_buf.size() < total_size)
             reuse_buf.resize(total_size);
@@ -950,98 +878,33 @@ void NetworkManager::messageLooper()
             buffer += players_data_size;
         }
         memcpy(buffer, &state_to_send.npcs, npc_data_size);
-        buffer += npc_data_size;
-        memcpy(buffer, &num_events, sizeof(size_t));
-        buffer += sizeof(size_t);
-        if(num_events > 0) {
-            memcpy(buffer, state_to_send.eventList.data(), event_data_size);
+
+        bool send_ok = false;
+        auto send_start = std::chrono::steady_clock::now();
+        try
+        {
+            // Use non-blocking send so publisher isn't stalled by slow subscribers
+            auto sent = m_publishSocket->send(zmq::buffer(reuse_buf.data(), total_size), zmq::send_flags::dontwait);
+            send_ok = static_cast<bool>(sent);
         }
-
-            // If no deltas, don't send anything
-            if (localDeltaList.empty())
+        catch (const zmq::error_t &e)
+        {
+            if (e.num() == EAGAIN)
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(16));
-                continue; // Skip to the next loop iteration
+                send_ok = false;
             }
-
-            // 2. Package ONLY these deltas into a list of NPCStates
-            std::vector<NPCState> npc_states;
-            npc_states.reserve(localDeltaList.size());
-
+            else
             {
-                // We still need to lock the master list to safely read
-                // the component data from the GameObject pointers.
-                std::lock_guard<std::mutex> lock(*m_objectListMutex);
-
-                for (const auto &obj : localDeltaList)
-                {
-                    // The test harness only adds NPCs to the delta list
-                    if (obj->hasComponent("is_npc"))
-                    {
-                        NPCState n;
-                        n.objectId = obj->getComponent<int>("npc_id");
-                        Vector pos = obj->getComponent<Vector>("position");
-                        n.x = pos.x;
-                        n.y = pos.y;
-                        npc_states.push_back(n);
-                    }
-                }
-            }
-
-            // If the list somehow only had non-NPCs, skip
-            const size_t num_npcs = npc_states.size();
-            if (num_npcs == 0)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(16));
-                continue; // Skip to the next loop iteration
-            }
-
-            // 3. Serialize into buffer (NEW DELTA PACKET FORMAT)
-            // Format: timestamp(u64) + sequence(u32) + num_npcs(size_t) + NPCState[]
-            // *Notice this packet is MUCH smaller: no player data, no MAX_NPCS padding*
-            const size_t npc_data_size = num_npcs * sizeof(NPCState);
-            const size_t total_size = sizeof(uint64_t) + sizeof(uint32_t) + sizeof(size_t) + npc_data_size;
-
-            if (reuse_buf.size() < total_size)
-                reuse_buf.resize(total_size);
-            char *buffer = reuse_buf.data();
-
-            // Write server timestamp
-            uint64_t server_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                        std::chrono::system_clock::now().time_since_epoch())
-                                        .count();
-            memcpy(buffer, &server_ts_ms, sizeof(uint64_t));
-            buffer += sizeof(uint64_t);
-
-            // Write sequence number
-            uint32_t seq = publish_seq++;
-            memcpy(buffer, &seq, sizeof(uint32_t));
-            buffer += sizeof(uint32_t);
-
-            // --- Serialize delta state ---
-            memcpy(buffer, &num_npcs, sizeof(size_t));
-            buffer += sizeof(size_t);
-            memcpy(buffer, npc_states.data(), npc_data_size);
-
-            // 4. Send the delta buffer
-            try
-            {
-                auto sent = m_publishSocket->send(zmq::buffer(reuse_buf.data(), total_size), zmq::send_flags::dontwait);
-            }
-            catch (const zmq::error_t &e)
-            {
-                if (e.num() != EAGAIN)
-                {
-                    std::cerr << "[Network] 'DeltaState' send threw zmq::error_t: " << e.what() << std::endl;
-                }
-            }
-            catch (const std::exception &e)
-            {
-                std::cerr << "[Network] 'DeltaState' send threw exception: " << e.what() << std::endl;
+                std::cerr << "[Network] publish send threw zmq::error_t: " << e.what() << " (num=" << e.num() << ")" << std::endl;
+                send_ok = false;
             }
         }
-        
-        // Shared sleep for both strategies
+        catch (const std::exception &e)
+        {
+            std::cerr << "[Network] publish send threw exception: " << e.what() << std::endl;
+            send_ok = false;
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 }
