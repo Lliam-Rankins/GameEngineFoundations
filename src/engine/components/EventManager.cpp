@@ -12,6 +12,11 @@ const EventTypeID CollisionEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("Colli
 const EventTypeID InputEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("InputEvent");
 const EventTypeID DeathEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("DeathEvent");
 const EventTypeID SpawnEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("SpawnEvent");
+const EventTypeID StartRecordingEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("StartRecordingEvent");
+const EventTypeID StopRecordingEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("StopRecordingEvent");
+const EventTypeID StartPlaybackEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("StartPlaybackEvent");
+const EventTypeID StopPlaybackEvent::STATIC_EVENT_TYPE_ID = ::GetEventTypeID("StopPlaybackEvent");
+
 
 void EventManager::ProcessEvents(float currentTimestamp)
 {
