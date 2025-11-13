@@ -13,7 +13,7 @@
 class RecordingManager : public EventManager {
     public:
         // Constructor to get access to the master object list
-        RecordingManager(std::vector<GameObject *> *masterList, 
+        RecordingManager(int player_id, Vector defaultOffset, std::vector<GameObject *> *masterList, 
                          std::mutex *mutex, 
                          void (*renderObjectFunction)(GameObject *, Vector));
 
@@ -40,6 +40,9 @@ class RecordingManager : public EventManager {
         bool *recording;
         bool isRecording = true;
         bool notRecording = false;
+
+        int player_id;
+        Vector defaultOffset;
 
         // Render Obj function, takes a game object ptr and an offset vector
         void (*render_func)(GameObject *, Vector);

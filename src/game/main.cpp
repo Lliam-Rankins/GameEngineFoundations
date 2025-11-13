@@ -1,35 +1,76 @@
-/*
-	This is a file that runs the main loop.
-	Some of the content in this file was generated with Gemini 2.5 Pro.
-	This citation is to abide by the syllabus requirement that "appropriate citations"
-	must be given when referring to external sources. More information is available upon request.
-*/
+
 #include "../engine/headers/render.h"
 #include "../engine/headers/physics.h"
 #include "../engine/headers/collisions.h"
+#include "../engine/headers/input.h"
+#include "../engine/headers/network.h"
+#include "../engine/headers/protocol.h"
+#include "../engine/headers/entities.h"
+#include "../engine/headers/input.h"
+#include "../engine/headers/timeline.h"
+#include "../engine/headers/GameObject.h"
+#include <iostream>
+#include <thread>
+#include <chrono>
+#include <map>
+#include <utility>
+
 
 // Initialize the window and renderer using SDL method
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
 
 // Window Variables
-Vector windowSize = {1440, 1080};
+Vector windowSize = {720, 540};
 
-// Starting Positions
-Vector playerPos = {100, 100};
-Vector platformPos_1 = {100, 400};
-Vector movingPlatPos_1 = {500, 600};
 
-// Defaults
-Vector defaultVel = {0, 0};
+///////////////////////////
+//	Defaults
+///////////////////////////
 
+// Player
+Vector player_Position = {100, 100};
+Vector player_Dimensions;
+SDL_Texture* player_Texture;
+Vector player_Velocity = {0, 0};
+
+// Platforms
+Vector platform1_Position = {100, 400};
+Vector platform2_Position = {400, 400};
+Vector platform3_Position = {700, 400};
+
+SDL_Texture* platform_Texture;
+Vector platform_Dimensions;;
+
+// Spawn Zones
+Vector spawnZone1_Position = {100, 100};
+Vector spawnZone2_Position = {700, 100};
+
+// DeathZones
+Vector deathZone1_Position = {100, 900};
+Vector deathZone1_Dimensions = {700, 100};
 
 // Game Vars
-float playerSpeed = 1.0;
-float playerJumpSpeed = 2.5;
-float movingPlatSpeed = .5;
+float playerSpeed = 300.0;
+float playerJumpSpeed = 300.0;
 
-int gravity = 2;
+int gravity = 200;
+
+bool isPaused = false;
+
+
+// Multiplayer Data
+std::thread myNetworkThread;
+std::mutex playersMutex;
+std::mutex npcMutex;
+NetworkManager myNetwork;
+std::map<int, std::unique_ptr<GameObject>> remotePlayers;
+std::map<int, std::unique_ptr<GameObject>> remoteNPCs;
+Vector remoteMovPlat_Pos;
+
+SDL_Texture* playerTex;
+
+
 
 
 //////////////////////////////////////////////////
@@ -49,12 +90,134 @@ void texCheck(SDL_Texture* tex) {
 	}
 }
 
-// Render entity
-void renderEntity(const Entity& e) {
-    SDL_FRect rectangle = { e.position.x - e.dimensions.x, e.position.y - e.dimensions.y, e.dimensions.x, e.dimensions.y};
-    SDL_RenderTexture(renderer, e.texture, NULL, &rectangle);
+bool collidable(GameObject *a) {
+	if (a->hasComponent("position") && a->hasComponent("dimensions")) return true;
+	return false;
 }
 
+void renderObj(GameObject *object, Vector offset) {
+	// Logic for adding dimensions and textures to remove players
+	if (object->hasComponent("is_player") && (!object->hasComponent("dimensions") || !object->hasComponent("texture"))) {
+		object->setComponent("dimensions", player_Dimensions);
+		object->setComponent("texture", player_Texture);
+	}
+
+	// Logic for adding dimensions and textures to npcs
+	if (object->hasComponent("is_npc") && (!object->hasComponent("dimensions") || !object->hasComponent("texture"))) {
+		object->setComponent("dimensions", platform_Dimensions);
+		object->setComponent("texture", platform_Texture);
+	}
+
+
+
+	// Only Render Objects with Positions and Dimensions, and a color or texture
+	// (!object->hasComponent("color") && !object->hasComponent("texture"))
+	if (!object->hasComponent("position") || !object->hasComponent("dimensions")) {
+		return;
+	}
+
+	Vector pos = object->getComponent<Vector>("position");
+	Vector dim = object->getComponent<Vector>("dimensions");
+
+	// Create Rectangle to render Obj
+	SDL_FRect rectangle = { pos.x - offset.x + 700, pos.y - offset.y  + 500, dim.x, dim.y};
+
+	// Object has Texture
+	if (object->hasComponent("texture")) {
+		SDL_Texture* tex = object->getComponent<SDL_Texture *>("texture");
+		SDL_RenderTexture(renderer, tex, NULL, &rectangle);
+	}
+	// Object has Color
+	else if (object->hasComponent("color")) {
+		SDL_Color color = object->getComponent<SDL_Color>("color");
+		SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+		SDL_RenderRect(renderer, &rectangle);
+	}
+	// Object has no color or texture
+	else {
+		SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
+		SDL_RenderFillRect(renderer, &rectangle);
+	}
+}
+
+
+void printList(std::vector<GameObject *> *objectList) {
+	for (const auto& obj : *objectList) {
+		if (obj->hasComponent("client_id")) {
+			std::cout << "Client Id:" << obj->getComponent<int>("client_id") << std::endl;
+		}
+	}
+}
+
+//////////////////////////////////////////////////
+//
+// Multithreading
+//
+/////////////////\/////////////////////////////////
+
+// Rendering Thread
+void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *player, std::vector<GameObject *> *localObjectList) {
+	// Loop Forever
+	while (true) {
+		// // Setup the Screen
+		setupScreen(renderer);
+
+		{
+			// Lock, rendering remote objects
+			std::lock_guard<std::mutex> lock(*objectMutex);
+
+			// Get Player Position for offsetting others
+			Vector offset = player->getComponent<Vector>("position");
+
+
+			// Render Local Objects
+			for (const auto &object : *localObjectList) {
+				renderObj(object, offset);
+			}
+
+			// Render Each Object
+			for (const auto &object : *objectList) {
+				if (object->hasComponent("client_id") && object->getComponent<int>("client_id") == player->getComponent<int>("client_id")) continue;
+				renderObj(object, offset);
+			}
+		}
+
+		// Wait
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
+
+	// Clear screen
+	// SDL_RenderClear(renderer);
+	
+	// refreshScreen(renderer);
+}
+
+// Network Thread
+void networking(NetworkManager *myNetwork, std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *localPlayer) {
+	// Loop Forever
+	while (true) {
+		{
+			PlayerState myPlayerState;
+			Vector pos = localPlayer->getComponent<Vector>("position");
+			myPlayerState.clientId = localPlayer->getComponent<int>("client_id");
+			myPlayerState.x = pos.x;
+			myPlayerState.y = pos.y; 
+			myNetwork->sendPlayerState(myPlayerState);
+		}
+
+
+		// Get correct Object List
+		myNetwork->update();
+
+		// Wait
+		std::this_thread::sleep_for(std::chrono::milliseconds(33));
+	}
+}
+
+void handleMovement() {
+	
+}
 
 //////////////////////////////////////////////////
 //
@@ -77,33 +240,119 @@ int main(int argc, char* argv[])
 
 
 	//Load Textures
-	SDL_Texture* playerTex = IMG_LoadTexture(renderer, "../media/darkworld_character_morwen_idle.png");
-	texCheck(playerTex);
+	player_Texture = IMG_LoadTexture(renderer, "../media/darkworld_character_morwen_idle.png");
+	texCheck(player_Texture);
 
-	SDL_Texture* brickTex = IMG_LoadTexture(renderer, "media/brick.png");
-	texCheck(brickTex);
+	platform_Texture = IMG_LoadTexture(renderer, "../media/darkworld_platform_brick_idle.png");
+	texCheck(platform_Texture);
 
-
-	// Entity creation
-	Entity player(playerPos, {playerTex->w, playerTex->h}, playerTex, true, defaultVel);
-
-	Entity platform_1(platformPos_1, {brickTex->w, brickTex->h}, brickTex, false, defaultVel);
-	Entity movingPlat_1(movingPlatPos_1, {brickTex->w, brickTex->h}, brickTex, false, {movingPlatSpeed, 0}); //Moves to the Right
+	// Create Dimensions
+	player_Dimensions = {player_Texture->w, player_Texture->h};
+	platform_Dimensions = {platform_Texture->w, platform_Texture->h};
 
 
-	//Creating and Setting Colliders
-	Collider playerCol(0, 0, 0, 0);
-	player.setCollider(&playerCol);
+	// Instantiate ObjectList
+    std::vector<GameObject *> objectList;
+	std::vector<GameObject *> localObjects;
+    std::mutex objectMutex;
 
-	Collider platformCol_1(0, 0, 0, 0);
-	platform_1.setCollider(&platformCol_1);
+	// Camera
+	GameObject camera;
+	camera.setComponent("position", player_Position);
+	camera.setComponent("is_camera", true);
 
-	Collider movingPlatCol_1(0, 0, 0, 0);
-	movingPlat_1.setCollider(&movingPlatCol_1);
+	// Player
+	GameObject player;
+	player.setComponent("position", player_Position);
+	player.setComponent("is_player", true);
+	player.setComponent("velocity", player_Velocity);
+	player.setComponent("dimensions", player_Dimensions);
+	player.setComponent("texture", player_Texture);
+	player.setComponent("physics", true);
 
+	// Platforms
+	GameObject platform_1 = GameObject();
+	platform_1.setComponent("position", platform1_Position);
+	platform_1.setComponent("npc_id", -1);
+	platform_1.setComponent("dimensions", platform_Dimensions);
+	platform_1.setComponent("texture", platform_Texture);
+
+	GameObject platform_2 = GameObject();
+	platform_2.setComponent("position", platform2_Position);
+	platform_2.setComponent("npc_id", -2);
+	platform_2.setComponent("dimensions", platform_Dimensions);
+	platform_2.setComponent("texture", platform_Texture);
+
+	GameObject platform_3 = GameObject();
+	platform_3.setComponent("position", platform3_Position);
+	platform_3.setComponent("npc_id", -3);
+	platform_3.setComponent("dimensions", platform_Dimensions);
+	platform_3.setComponent("texture", platform_Texture);
+
+	// Spawn Zones
+	GameObject spawnZone_1 = GameObject();
+	spawnZone_1.setComponent("position", spawnZone1_Position);
+	spawnZone_1.setComponent("object_id", -4);
+
+	GameObject spawnZone_2 = GameObject();
+	spawnZone_2.setComponent("position", spawnZone2_Position);
+	spawnZone_2.setComponent("object_id", -5);
+
+	// Death Zone
+	GameObject deathZone_1 = GameObject();
+	deathZone_1.setComponent("position", deathZone1_Position);
+	deathZone_1.setComponent("object_id", -6);
+	deathZone_1.setComponent("dimensions", deathZone1_Dimensions);
+
+	localObjects.push_back(&player);
+	localObjects.push_back(&platform_1);
+	localObjects.push_back(&platform_2);
+	localObjects.push_back(&platform_3);
+	localObjects.push_back(&spawnZone_1);
+	localObjects.push_back(&spawnZone_2);
+	localObjects.push_back(&deathZone_1);
 
 	// Setting Gravity
 	WorldPhysics::setGravity(gravity);
+
+	// Time Line Setup
+	Timeline timeline;
+
+
+	////////////////////
+	// Network Setup
+	////////////////////
+	NetworkManager myNetwork;
+
+	// Start the client
+	const int SUBSCRIBE_PORT = 5556;
+	const int HANDSHAKE_PORT = 5557;
+	const int REQUEST_BASE_PORT = 5600;
+
+	int REPLY_PORT;
+
+	int myID = myNetwork.connectAndHandshake("localhost", HANDSHAKE_PORT, REPLY_PORT);
+	if (myID == -1) {
+		std::cerr << "Client Failed to be created" << std::endl;
+		exit(1);
+	}
+	player.setComponent("client_id", myID);
+
+	myNetwork.startClient("localhost", REQUEST_BASE_PORT + myID, SUBSCRIBE_PORT, objectList, objectMutex);
+
+	//////////////////////////////////////////////////
+	//
+	// Multi Threading
+	//
+	//////////////////////////////////////////////////
+
+	// Start Networking Thread
+	std::thread netThread(&networking, &myNetwork, &objectList, &objectMutex, &player);
+
+	// Start Rendering Thread
+	std::thread renderThread(&rendering, &objectList, &objectMutex, &player, &localObjects);
+
+	std::cout << "Started multi threading" << myID << std::endl;
 
 
 
@@ -116,38 +365,43 @@ int main(int argc, char* argv[])
 	// Main game loop condition variable
 	bool running = true;
 
-	std::thread networkThread(network_thread_loop, &running, &networkManager, &localPlayer, &myClientId);
-
 	// SDL_Event to capture event of window being closed
 	SDL_Event event;
 
 	// Scaling Type bool
 	bool constantSizeScale = true;
 
-	// Variables to track the previous state of toggle keys to prevent flickering. These are for scaling, making player spawn, and time management
-	bool graveKeyWasPressedLastFrame = false;
-	bool pKeyWasPressedLastFrame = false;
-	bool oKeyWasPressedLastFrame = false;
-	bool minusKeyWasPressedLastFrame = false;
-	bool equalsKeyWasPressedLastFrame = false;
-	bool zeroKeywasPressedLastFrame = false;
-
 	// The main game loop
-	while (running)
-	{
+	while (running) {
 
-		// Update the timeline and get the current delta time.
-		mainTimeline.update();
-		float dt = mainTimeline.getDeltaTime();
-		const float MAX_DELTA_TIME = 1.0f / 20.0f;
-		if (dt > MAX_DELTA_TIME)
-		{
-			dt = MAX_DELTA_TIME;
-		}
-		while (SDL_PollEvent(&event))
-		{
+		// Time Line Update
+		timeline.update();
+		float d_time = timeline.getDeltaTime();
+
+
+		// Poll for events
+		while (SDL_PollEvent(&event)) {
+
+			// If event is Window Resize
+			if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+				// Constant Scaling
+				if (constantSizeScale) {
+					// Resize as if the screen was still the same
+					SDL_SetRenderLogicalPresentation(renderer, 1920, 1080, SDL_LOGICAL_PRESENTATION_STRETCH);
+				}
+				// Proportional Scaling
+				else {
+					//Get Window Size
+					int w, h;
+					SDL_GetWindowSize(window, &w, &h);
+					// Resize as if the screen was still the same
+					SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
+				}	
+			}
+
+			// Read input from input manager
+			// If the event is close the window
 			if (event.type == SDL_EVENT_QUIT)
-			{
 				running = false;
 
 			// Otherwise look for a key press
@@ -161,6 +415,36 @@ int main(int argc, char* argv[])
 				if (isKeyPressed(SDL_SCANCODE_GRAVE)) {									// Change Scaling Mode
 					constantSizeScale = !constantSizeScale;
 				}
+
+				////////////////////////////////
+				//	Asyc
+				////////////////////////////////
+				// Slow down game
+				if (isKeyPressed(SDL_SCANCODE_COMMA)){
+					timeline.setTimeScale(0.5);
+				}
+				// Regular Speed
+				if (isKeyPressed(SDL_SCANCODE_PERIOD)) {
+					timeline.setTimeScale(1.0);
+				}
+				// Speed Up
+				if (isKeyPressed(SDL_SCANCODE_SLASH)) {
+					timeline.setTimeScale(2.0);
+				}
+				// Pause
+				if (isKeyPressed(SDL_SCANCODE_P)) {
+					//Unpause
+					if (isPaused) {
+						timeline.setTimeScale(1.0);
+						isPaused = false;
+					}
+					//Pause
+					else {
+						timeline.setTimeScale(0.0);
+						isPaused = true;
+					}
+					
+				}
 			}
 		}
 
@@ -170,12 +454,8 @@ int main(int argc, char* argv[])
 		//
 		//////////////////////////////////////////////////
 
-		// Update moving platforms position
-		if (movingPlat_1.position.x > movingPlatPos_1.x + 100) movingPlat_1.velocity.x = -movingPlatSpeed;
-		if (movingPlat_1.position.x < movingPlatPos_1.x - 100) movingPlat_1.velocity.x = movingPlatSpeed;
-		movingPlat_1.updatePosition();
 
-		platform_1.updatePosition();
+
 
 
 		//////////////////////////////////////////////////
@@ -184,111 +464,103 @@ int main(int argc, char* argv[])
 		//
 		//////////////////////////////////////////////////
 		// Player Movement
+		Vector vel = player.getComponent<Vector>("velocity");
 		if (isKeyPressed(SDL_SCANCODE_W) || isKeyPressed(SDL_SCANCODE_SPACE)) {	// Jump
-				player.velocity.y = -playerJumpSpeed;
-				player.updatePosition();
+			vel.y += -playerJumpSpeed * d_time;
 		}
 		if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
-			player.velocity.x = -playerSpeed;
-			player.updatePosition();
+			vel.x += -playerSpeed * d_time;
 		}
 		if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
-			player.velocity.y = playerSpeed;
-			player.updatePosition();
+			vel.y += playerJumpSpeed * d_time;
 		}
 		if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
-			player.velocity.x = playerSpeed;
-			player.updatePosition();
+			vel.x += playerSpeed * d_time;	
 		}
 
-		
-		
-		// Check if player is coliding with anything
-		if (!overlappingColliders(*player.collider, *platform_1.collider) && !overlappingColliders(*player.collider, *movingPlat_1.collider)) {
-			player.velocity.y += WorldPhysics::getGravity();
-		}
-
-		player.updatePosition();
-		player.velocity = {0, 0};
+		// Add Gravity
+		vel.y += WorldPhysics::getGravity() * d_time;
 
 		//////////////////////////////////////////////////
-    //
-		// Rendering
+		//
+		// Collisions
 		//
 		//////////////////////////////////////////////////
-
-		// Setup the Screen
-		setupScreen(renderer);
-
-		renderEntity(player);
-		renderEntity(platform_1);
-		renderEntity(movingPlat_1);
-
-		if (police.position.x > rightBound)
-			police.setVelocity({-150.0f, 0});
-		if (police.position.x < leftBound)
-			police.setVelocity({150.0f, 0});
-
-		police.setPosition({police.getPosition().x + police.getVelocity().x * dt, police.getPosition().y});
-		SyncColliderToEntity(police);
-
-		localPlayer.setVelocity({localPlayer.getVelocity().x, localPlayer.getVelocity().y + WorldPhysics::getGravity() * dt});
-
-		Vector nextPosition = localPlayer.getPosition();
-		nextPosition.x += localPlayer.getVelocity().x * dt;
-		nextPosition.y += localPlayer.getVelocity().y * dt;
-
-		Collider testCollider(
-			nextPosition.x - localPlayer.dimensions.x / 2.0f,
-			nextPosition.y - localPlayer.dimensions.y / 2.0f,
-			nextPosition.x + localPlayer.dimensions.x / 2.0f,
-			nextPosition.y + localPlayer.dimensions.y / 2.0f);
-
-		// Check for collision with the platform
-		if (overlappingColliders(testCollider, *platform.collider))
-		{
-			
-			if (localPlayer.getVelocity().y > 0)
-			{
-				nextPosition.y = platform.collider->topLeft.y - localPlayer.dimensions.y / 2.0f;
-				localPlayer.setVelocity({localPlayer.getVelocity().x, 0});
+		
+		// Check Local Platforms
+		if (collidable(&player) && collidable(&platform_1) && collidable(&platform_2) && collidable(&platform_3)) {				
+			if (overlappingColliders1(player, platform_1) || overlappingColliders1(player, platform_2) || overlappingColliders1(player, platform_3)) {				
+				// If on platform, stop moving down
+				if (vel.y > 0) vel.y = 0;
 			}
 		}
 
-		localPlayer.setPosition(nextPosition);
+		// Check Death Zones
+		if (collidable(&player) && collidable(&deathZone_1)) {
+			if (overlappingColliders1(player, deathZone_1)) {
+				std::cout << "HAHA, you died" << std::endl;
 
-		platformRenderer.render(renderer, platform.position, platform.dimensions);
-		policeRenderer.render(renderer, police.position, police.dimensions);
-
-		// Render the local player
-		if (playerRenderers.count(myClientId))
-		{
-			playerRenderers.at(myClientId).render(renderer, localPlayer.getPosition(), localPlayer.getDimensions());
-		}
-
-		{
-			std::lock_guard<std::mutex> lock(remotePlayersMutex);
-			// Render remote players
-			for (auto const &[id, remote_player_ptr] : remotePlayers)
-			{
-				if (playerRenderers.find(id) == playerRenderers.end())
-				{
-					playerRenderers.emplace(id, RenderComponent(playerTexture));
+				int spawnZone_choice = random() % 2;
+				std::cout << "Spawn Zone Choice: " << spawnZone_choice << std::endl;
+				switch (spawnZone_choice) {
+					case 0:
+						player.setComponent("position", spawnZone1_Position);
+						break;
+					case 1:
+						player.setComponent("position", spawnZone2_Position);
+						break;
 				}
-				// Use the pointer to get the entity's data
-				playerRenderers.at(id).render(renderer, remote_player_ptr->getPosition(), remote_player_ptr->getDimensions());
+
 			}
 		}
+
+		// Check Remote Platforms
+		{
+			// Lock, remote objects
+			std::lock_guard<std::mutex> lock(objectMutex);
+
+			// Check if player is not coliding with anything
+			GameObject *movingPlatformHorizontal = findGameObjectByNpcId(1, objectList);
+			GameObject *movingPlatformVertical = findGameObjectByNpcId(2, objectList);
+
+			// Do we have the remote objects
+			if (movingPlatformHorizontal && movingPlatformVertical) {
+				if (collidable(movingPlatformHorizontal) && collidable(movingPlatformVertical)) {
+					if (overlappingColliders1(player, *movingPlatformHorizontal) || overlappingColliders1(player, *movingPlatformVertical)) {						
+						// Stop Moving Down
+						if (vel.y > 0) vel.y = 0;
+					}
+				}
+			}
+			else {
+				std::cout << "findGameObject Failed" << std::endl;
+			}
+
+		}
+		
+		
+
+		
+
+		// Move player and then reset their velocity
+		player.setComponent("velocity", vel);
+		updatePosition(player, isPaused);
+		player.setComponent("velocity", player_Velocity);
+
+
+
+		//////////////////////////////////////////////////
+		//
+		// Rendering
+		//
+		//////////////////////////////////////////////////			
+		// // Render Local Player
 
 		refreshScreen(renderer);
+		
+		// std::cout << "Refresh, end of loop" << std::endl;
 	}
 
-	networkThread.join();
-	SDL_DestroyTexture(playerTexture);
-	SDL_DestroyTexture(platformTexture);
-	SDL_DestroyTexture(policeTexture);
-
-	networkManager.cleanUp();
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();

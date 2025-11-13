@@ -1,4 +1,4 @@
-#include "mathEngine.h"
+#include "../headers/mathEngine.h"
 
 Vector vectorAdd(Vector a, Vector b) {
 	Vector result;

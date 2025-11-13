@@ -1,7 +1,8 @@
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON) # Ensure it fails if 17 isn't supported
+set(CMAKE_CXX_EXTENSIONS OFF)
 cmake_minimum_required(VERSION 3.10)
 project(Project)
-
-set(CMAKE_CXX_STANDARD 17)
 
 find_package(SDL3 REQUIRED)
 find_package(SDL3_image REQUIRED)
@@ -16,30 +17,27 @@ add_executable(client
     ./src/engine/components/collisions.cpp
     ./src/engine/components/network.cpp
     ./src/engine/components/timeline.cpp
-)
-
-add_executable(p2p_client
-    ./src/game/p2p_main.cpp
-    ./src/engine/components/render.cpp
-    ./src/engine/components/input.cpp
-    ./src/engine/components/entities.cpp
-    ./src/engine/components/physics.cpp
-    ./src/engine/components/collisions.cpp
-    ./src/engine/components/P2PClientManager.cpp
-    ./src/engine/components/timeline.cpp
+    ./src/engine/components/GameObject.cpp
 )
 
 target_compile_definitions(client PRIVATE IS_CLIENT)
 
 add_executable(server
-    ./src/engine/components/server.cpp
+    ./src/game/server.cpp
     ./src/engine/components/network.cpp
+    ./src/engine/components/entities.cpp
+    ./src/engine/components/timeline.cpp
+    ./src/engine/components/mathEngine.cpp
+    ./src/engine/components/GameObject.cpp
 )
 
-add_executable(p2p_server
-    ./src/game/P2Pserver.cpp
-    ./src/engine/components/P2PServerManager.cpp
+add_executable(server_testing
+    ./src/game/server_testing.cpp
+    ./src/engine/components/network.cpp
+    ./src/engine/components/entities.cpp
     ./src/engine/components/timeline.cpp
+    ./src/engine/components/mathEngine.cpp
+    ./src/engine/components/GameObject.cpp
 )
 
 set(MEDIA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/media")
@@ -53,8 +51,8 @@ add_custom_command(
 )
 
 target_link_libraries(client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
-target_link_libraries(p2p_client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
 target_link_libraries(server PRIVATE cppzmq)
-target_link_libraries(p2p_server PRIVATE cppzmq)
+target_link_libraries(server_testing PRIVATE cppzmq)
+
 
 
