@@ -1,7 +1,8 @@
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON) # Ensure it fails if 17 isn't supported
+set(CMAKE_CXX_EXTENSIONS OFF)
 cmake_minimum_required(VERSION 3.10)
 project(Project)
-
-set(CMAKE_CXX_STANDARD 17)
 
 find_package(SDL3 REQUIRED)
 find_package(SDL3_image REQUIRED)

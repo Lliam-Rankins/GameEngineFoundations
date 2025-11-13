@@ -10,7 +10,6 @@
 #include <vector>
 #include <mutex>
 #include <cmath>
-
 #include "../headers/network.h"
 #include "../headers/timeline.h"
 #include "../headers/GameObject.h"

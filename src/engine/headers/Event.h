@@ -149,3 +149,18 @@ struct StartPlaybackEvent : public Event
     StartPlaybackEvent(float ts, int eID)
         : Event(ts) {}
 };
+
+/**
+ * Stop Playback event struct
+ */
+struct StopPlaybackEvent : public Event
+{
+    static const EventTypeID STATIC_EVENT_TYPE_ID;
+    virtual EventTypeID GetEventTypeID() const override
+    {
+        return STATIC_EVENT_TYPE_ID;
+    }
+
+    StopPlaybackEvent(float ts)
+        : Event(ts) {}
+};
