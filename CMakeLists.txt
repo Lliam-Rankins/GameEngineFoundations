@@ -32,6 +32,7 @@ add_executable(server
     ./src/engine/components/mathEngine.cpp
     ./src/engine/components/GameObject.cpp
     ./src/engine/components/EventManager.cpp
+    ./src/engine/components/collisions.cpp
 )
 
 set(MEDIA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/media")

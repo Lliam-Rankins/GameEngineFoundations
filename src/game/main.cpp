@@ -87,7 +87,8 @@ enum Direction {
     UP,
     DOWN,
 	LEFT,
-	RIGHT
+	RIGHT,
+	FAR_LEFT
 };
 
 // Texture valid check
@@ -173,7 +174,6 @@ void rendering(bool *playingRecording, std::vector<GameObject *> *objectList, st
 	// Loop Forever
 	while (true) {
 		if (!*playingRecording) {
-			std::cout << "Render" << std::endl;
 			// Setup the Screen
 			setupScreen(renderer);
 
@@ -236,6 +236,9 @@ void networking(NetworkManager *myNetwork, std::vector<GameObject *> *objectList
 
 		// Get correct Object List
 		myNetwork->update();
+
+		
+
 
 		// Wait
 		std::this_thread::sleep_for(std::chrono::milliseconds(33));
@@ -399,28 +402,36 @@ int main(int argc, char* argv[])
 	eventManager.RegisterListener(InputEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
 		const auto &input = static_cast<const InputEvent &>(e);
 
-		Vector playerVel = player.getComponent<Vector>("velocity");
+		if (input.playerID == player.getComponent<int>("client_id")) {
+			Vector playerVel = player.getComponent<Vector>("velocity");
 
-		switch (input.action) {
-			case UP:
-				player.setComponent("velocity", Vector{playerVel.x, -playerJumpSpeed * timeline.getDeltaTime()});
-				break; 
+			switch (input.action) {
+				case UP:
+					player.setComponent("velocity", Vector{playerVel.x, -playerJumpSpeed * timeline.getDeltaTime()});
+					break; 
 
-			case DOWN:
-				player.setComponent("velocity", Vector{playerVel.x, playerSpeed * timeline.getDeltaTime()});
-				break;
+				case DOWN:
+					player.setComponent("velocity", Vector{playerVel.x, playerSpeed * timeline.getDeltaTime()});
+					break;
 
-			case LEFT:
-				player.setComponent("velocity", Vector{-playerSpeed * timeline.getDeltaTime(), playerVel.y});
-				break;
+				case LEFT:
+					player.setComponent("velocity", Vector{-playerSpeed * timeline.getDeltaTime(), playerVel.y});
+					break;
 
-			case RIGHT:
-				player.setComponent("velocity", Vector{playerSpeed * timeline.getDeltaTime(), playerVel.y});
-				break;
+				case RIGHT:
+					player.setComponent("velocity", Vector{playerSpeed * timeline.getDeltaTime(), playerVel.y});
+					break;
+					
+				case FAR_LEFT:
+					player.setComponent("velocity", Vector{-playerSpeed * 30 * timeline.getDeltaTime(), playerVel.y});
+					break;
+			}
 		}
 	});
 
 	std::cout << "Events" << std::endl;
+
+
 
 
 	////////////////////
@@ -445,6 +456,8 @@ int main(int argc, char* argv[])
 	myNetwork.startClient("localhost", REPLY_PORT, SUBSCRIBE_PORT, objectList, objectMutex, eventList, eventMutex);
 
 	std::cout << "Network Up" << std::endl;
+
+
 
 	///////////////////////
 	//	Recording Manager
@@ -506,9 +519,22 @@ int main(int argc, char* argv[])
 	// The main game loop
 	while (running) {
 
+		// std::cout << eventList.size() << std::endl;
+
 		// Time Line Update
 		timeline.update();
 		float d_time = timeline.getDeltaTime();
+
+		{
+			std::lock_guard<std::mutex> lock(eventMutex);
+
+			for (auto &evt : eventList) {
+				std::cout << "Queued network event" << std::endl;
+				eventManager.QueueEvent(evt);
+			}
+
+			eventList.clear(); // clear after dispatch
+		}
 
 
 		// Poll for events
@@ -738,6 +764,11 @@ int main(int argc, char* argv[])
 		refreshScreen(renderer);
 		
 		// std::cout << "Refresh, end of loop" << std::endl;
+
+		// {
+        //     std::lock_guard<std::mutex> lock(eventMutex);
+        //     eventList.clear();
+        // }
 	}
 
 	SDL_DestroyRenderer(renderer);
