@@ -305,10 +305,8 @@ void NetworkManager::update()
         newState.eventList.resize(num_events);
         memcpy(newState.eventList.data(), buffer, num_events * sizeof(NetworkEvent));
         buffer += num_events * sizeof(NetworkEvent);
-        //std::cout << newState.eventList[1].type << std::endl;
     }
     newState.num_events = num_events;
-    //std::cout << newState.num_events << std::endl;
     
 
 
@@ -379,7 +377,6 @@ void NetworkManager::update()
         for(const auto &event : newState.eventList) {
             if(event.type == -1) continue;
 
-            //std::cout << "Event type: " << event.type << std::endl;
 
             if(event.type == 1) {
                 auto collisionEvent = std::make_shared<CollisionEvent>(event.timestamp, event.id1, event.id2);
@@ -395,7 +392,6 @@ void NetworkManager::update()
                 m_masterEventList->push_back(spawnEvent);
             }
 
-            std::cout << "Event registered!" << event.type << std::endl;
         }
     }
 
@@ -599,7 +595,6 @@ void NetworkManager::readClient(int id, int portNum)
         {
             std::lock_guard<std::mutex> lock(m_gameStateMut);
             m_gameState.num_events += clientState.num_events;
-            std::cout << m_gameState.num_events << std::endl;
             for(int i = 0; i < clientState.num_events; i++) {
                 m_gameState.eventList.push_back(clientState.events[i]);
             }
