@@ -1,25 +1,6 @@
-/*
-    This is the new main file for the client, rebuilt from scratch
-    to use the GameObject and Component model. Some of the content in this file was edited with AI tools.
-    This citation is to abide by the syllabus requirement that "appropriate citations"
-    must be given when referring to external sources. More information is available upon request.
-*/
-#include <SDL3_image/SDL_image.h>
-#include <iostream>
-#include <thread>
-#include <chrono>
-#include <vector>
-#include <mutex>
-#include <cmath>
-#include <memory>
+
 #include "../engine/headers/render.h"
 #include "../engine/headers/physics.h"
-#include "../engine/headers/input.h"
-#include "../engine/headers/network.h"
-#include "../engine/headers/protocol.h"
-#include "../engine/headers/timeline.h"
-#include "../engine/headers/GameObject.h"
-#include "../engine/headers/gameUtils.h"
 #include "../engine/headers/collisions.h"
 #include "../engine/headers/input.h"
 #include "../engine/headers/network.h"
@@ -28,95 +9,201 @@
 #include "../engine/headers/input.h"
 #include "../engine/headers/timeline.h"
 #include "../engine/headers/GameObject.h"
+#include "../engine/headers/gameUtils.h"
+#include "../engine/headers/EventManager.h"
+#include "../engine/headers/recording.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
 #include <map>
 #include <utility>
 
+// Initialize the window and renderer using SDL method
+SDL_Window* window = nullptr;
+SDL_Renderer* renderer = nullptr;
 
-const float SCREEN_W = 1920.0f;
-const float SCREEN_H = 1080.0f;
+// Window Variables
+Vector windowSize = {1920, 1080};
 
-const float WORLD_WIDTH = 10000.0f;
-const float WORLD_HEIGHT = 8000.0f;
+// Player
+Vector player_Position = {1920 / 2.0f, 1080 / 2.0f};
+Vector player_Dimensions;
+SDL_Texture* player_Texture;
+Vector player_Velocity = {0, 0};
 
-const int ACTION_MOVE_LEFT = 1;
-const int ACTION_MOVE_RIGHT = 2;
-const int ACTION_JUMP = 3;
+// Platforms
+Vector platform1_Position = {1920 / 2.0f, 1080 / 2.0f + 30.0f};
+Vector platform2_Position = {1920 / 2.0f + 100.0f, 1080 / 2.0f - 100.0f};
+Vector platform3_Position = {1920 / 2.0f + 150.0f, 1080 / 2.0f + 30.0f};
 
-/**
- * Sends the player's information
- */
-void sendPlayerThread(bool *running, NetworkManager *network, std::vector<GameObject *> *list, std::mutex *mut, NetworkEvent *localEvents, int *numEvents, std::mutex *eventMut, int id)
-{
-    // While the game is running...
-    while (*running)
-    {
-        // Get this player...
-        GameObject *myPlayer = nullptr;
-        {
-            // Lock it all down
-            std::lock_guard<std::mutex> lock(*mut);
-            myPlayer = findGameObjectByClientId(id, *list);
-        }
-        // If I couldn't get the player,  restart
-        if (!myPlayer)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(16));
-            continue;
-        }
-        // Create a PlayerState based on current player data and send it out
-        PlayerState playerState;
-        playerState.clientId = id;
-        playerState.x = myPlayer->getComponent<Vector>("position").x;
-        playerState.y = myPlayer->getComponent<Vector>("position").y;
+SDL_Texture* platform_Texture;
+SDL_Texture* turret_texture;
+SDL_Texture* police_texture;
+Vector platform_Dimensions;
 
-        {
-            std::lock_guard<std::mutex> lock2(*eventMut);
-            playerState.num_events = (*numEvents);
-            for (int i = 0; i < playerState.num_events; i++)
-            {
-                playerState.events[i] = localEvents[i];
+// Spawn Zones
+Vector spawnZone1_Position = {1920 / 2.0f, 1080 / 2.0f - 30.0f};
+Vector spawnZone2_Position = {700, 100};
+
+// DeathZones
+Vector deathZone1_Position = {1920 / 2.0f + 200.0f, 1080 / 2.0f};
+Vector deathZone1_Dimensions = {400, 50};
+
+// Game Vars
+float playerSpeed = 300.0;
+float playerJumpSpeed = 300.0;
+
+int gravity = 300;
+
+bool isPaused = false;
+
+// Multiplayer Data
+std::thread myNetworkThread;
+std::mutex playersMutex;
+std::mutex npcMutex;
+NetworkManager myNetwork;
+std::map<int, std::unique_ptr<GameObject>> remotePlayers;
+std::map<int, std::unique_ptr<GameObject>> remoteNPCs;
+Vector remoteMovPlat_Pos;
+
+SDL_Texture* playerTex;
+
+// Input Enum
+enum Direction {
+    UP,
+    DOWN,
+	LEFT,
+	RIGHT
+};
+
+// Texture valid check
+void texCheck(SDL_Texture* tex) {
+	if (!tex) {
+		SDL_Log("Could not load image: %s", SDL_GetError());
+		SDL_DestroyRenderer(renderer);
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		exit(1);
+	}
+}
+
+bool collidable(GameObject *a) {
+	if (a->hasComponent("position") && a->hasComponent("dimensions")) return true;
+	return false;
+}
+
+void renderObj(GameObject *object, Vector offset) {
+	// Logic for adding dimensions and textures to remove players
+	if (object->hasComponent("is_player") && (!object->hasComponent("dimensions") || !object->hasComponent("texture"))) {
+		object->setComponent("dimensions", player_Dimensions);
+		object->setComponent("texture", player_Texture);
+	}
+
+	// Logic for adding dimensions and textures to npcs
+	if (object->hasComponent("is_npc") && (!object->hasComponent("dimensions") || !object->hasComponent("texture"))) {
+		object->setComponent("dimensions", platform_Dimensions);
+		object->setComponent("texture", platform_Texture);
+	}
+
+	// Only Render Objects with Positions and Dimensions, and a color or texture
+	// (!object->hasComponent("color") && !object->hasComponent("texture"))
+	if (!object->hasComponent("position") || !object->hasComponent("dimensions")) {
+		return;
+	}
+
+	Vector pos = object->getComponent<Vector>("position");
+	Vector dim = object->getComponent<Vector>("dimensions");
+
+	// Create Rectangle to render Obj
+	SDL_FRect rectangle = { pos.x - offset.x + 700, pos.y - offset.y  + 500, dim.x, dim.y};
+
+	// Object has Texture
+	if (object->hasComponent("texture")) {
+		SDL_Texture* tex = object->getComponent<SDL_Texture *>("texture");
+		SDL_RenderTexture(renderer, tex, NULL, &rectangle);
+	}
+	// Object has Color
+	else if (object->hasComponent("color")) {
+		SDL_Color color = object->getComponent<SDL_Color>("color");
+		SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+		SDL_RenderRect(renderer, &rectangle);
+	}
+	// Object has no color or texture
+	else {
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+		SDL_RenderFillRect(renderer, &rectangle);
+	}
+}
+
+// Rendering Thread
+void rendering(bool *playingRecording, std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *player, std::vector<GameObject *> *localObjectList) {
+	// Loop Forever
+	while (true) {
+		if (!*playingRecording) {
+			// Setup the Screen
+			setupScreen(renderer);
+
+			{
+				// Lock, rendering remote objects
+				std::lock_guard<std::mutex> lock(*objectMutex);
+
+				// Get Player Position for offsetting others
+				Vector offset = player->getComponent<Vector>("position");
+
+
+				// Render Local Objects
+				for (const auto &object : *localObjectList) {
+					renderObj(object, offset);
+				}
+
+				// Render Each Object
+				for (const auto &object : *objectList) {
+					if (object->hasComponent("client_id") && object->getComponent<int>("client_id") == player->getComponent<int>("client_id")) continue;
+					renderObj(object, offset);
+				}
+			}
+		}
+
+		// Wait
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+}
+
+// Network Thread
+void networking(NetworkManager *myNetwork, std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *localPlayer, NetworkEvent* localEvents, int *numEvents, std::mutex* eventMutex) {
+	// Loop Forever
+	while (true) {
+		PlayerState myPlayerState;
+		{
+			Vector pos = localPlayer->getComponent<Vector>("position");
+			myPlayerState.clientId = localPlayer->getComponent<int>("client_id");
+			myPlayerState.x = pos.x;
+			myPlayerState.y = pos.y; 
+		}
+
+		{
+            std::lock_guard<std::mutex> lock(*eventMutex);
+            myPlayerState.num_events = (*numEvents);
+            for(int i = 0; i < myPlayerState.num_events; i++) {
+                myPlayerState.events[i] = localEvents[i];
             }
-            // std::cout << "Num Local Events: " << (*numEvents) << std::endl;
+            
             (*numEvents) = 0;
         }
-        network->sendPlayerState(playerState);
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
-    }
+
+		myNetwork->sendPlayerState(myPlayerState);
+
+		// Get correct Object List
+		myNetwork->update();
+
+		// Wait
+		std::this_thread::sleep_for(std::chrono::milliseconds(33));
+	}
 }
 
-/**
- * Thread that receives the latest network updates asynchronously from the rest of main's functionality.
- */
-void receiveUpdateThread(bool *running, NetworkManager *network, std::vector<GameObject *> *list, std::mutex *mut)
+// Main Function
+int main(int argc, char* argv[])
 {
-    while (*running)
-    {
-        {
-            network->update();
-            // Simplify engine later to also update position
-            for (auto &obj : *list)
-            {
-                if (obj->hasComponent("net_position"))
-                {
-                    obj->setComponent("position", obj->getComponent<Vector>("net_position"));
-                }
-            }
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(16));
-    }
-}
-
-int main(int argc, char *argv[])
-{
-
-	//////////////////////////////////////////////////
-	//
-	// Setup
-	//
-	//////////////////////////////////////////////////
 
 	// Initialize the SDL library
 	initializeSDL();
@@ -125,11 +212,17 @@ int main(int argc, char *argv[])
 
 
 	//Load Textures
-	player_Texture = IMG_LoadTexture(renderer, "../media/darkworld_character_morwen_idle.png");
+	player_Texture = IMG_LoadTexture(renderer, "media/warped city files/Assets/SPRITES/player/idle/idle-1.png");
 	texCheck(player_Texture);
 
-	platform_Texture = IMG_LoadTexture(renderer, "../media/darkworld_platform_brick_idle.png");
+	platform_Texture = IMG_LoadTexture(renderer, "media/warped city files/Assets/ENVIRONMENT/props/control-box-3.png");
 	texCheck(platform_Texture);
+
+    turret_texture = IMG_LoadTexture(renderer, "media/warped city files/Assets/SPRITES/misc/turret/turret-1.png");
+    texCheck(turret_texture);
+
+    police_texture = IMG_LoadTexture(renderer, "/home/hplenham/CSC581/CSC581-Project/media/warped city files/Assets/SPRITES/vehicles/v-police.png");
+    texCheck(police_texture);
 
 	// Create Dimensions
 	player_Dimensions = {player_Texture->w, player_Texture->h};
@@ -137,18 +230,18 @@ int main(int argc, char *argv[])
 
 
 	// Instantiate ObjectList
+	std::vector<std::vector<GameObject *> *> masterObjectList;
     std::vector<GameObject *> objectList;
 	std::vector<GameObject *> localObjects;
     std::mutex objectMutex;
 
-	// Camera
-	GameObject camera;
-	camera.setComponent("position", player_Position);
-	camera.setComponent("is_camera", true);
+	masterObjectList.push_back(&objectList);
+	masterObjectList.push_back(&localObjects);
 
 	// Player
 	GameObject player;
 	player.setComponent("position", player_Position);
+	player.setComponent("is_local_player", true);
 	player.setComponent("is_player", true);
 	player.setComponent("velocity", player_Velocity);
 	player.setComponent("dimensions", player_Dimensions);
@@ -166,13 +259,13 @@ int main(int argc, char *argv[])
 	platform_2.setComponent("position", platform2_Position);
 	platform_2.setComponent("npc_id", -2);
 	platform_2.setComponent("dimensions", platform_Dimensions);
-	platform_2.setComponent("texture", platform_Texture);
+	platform_2.setComponent("texture", turret_texture);
 
 	GameObject platform_3 = GameObject();
 	platform_3.setComponent("position", platform3_Position);
 	platform_3.setComponent("npc_id", -3);
 	platform_3.setComponent("dimensions", platform_Dimensions);
-	platform_3.setComponent("texture", platform_Texture);
+	platform_3.setComponent("texture", police_texture);
 
 	// Spawn Zones
 	GameObject spawnZone_1 = GameObject();
@@ -203,10 +296,82 @@ int main(int argc, char *argv[])
 	// Time Line Setup
 	Timeline timeline;
 
+	std::vector<std::shared_ptr<Event>> eventList;
+    std::mutex eventMutex;
 
-	////////////////////
-	// Network Setup
-	////////////////////
+	NetworkEvent networkEvents[32];
+    std::mutex networkEventMutex;
+	int numNetworkEvents = 0;
+
+	EventManager eventManager;
+	bool *playingRecording = new bool(false);
+
+	// Collision Event
+	eventManager.RegisterListener(CollisionEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+		const auto &collision = static_cast<const CollisionEvent &>(e);
+
+		// Player collides with platform
+		if (collision.objectB_ID == -1 || collision.objectB_ID == -2 || collision.objectB_ID == -3 || collision.objectB_ID == 1 || collision.objectB_ID == 2) {
+			// Set downward velocity to 0
+			player.setComponent("velocity", Vector{player.getComponent<Vector>("velocity").x, -WorldPhysics::getGravity() * timeline.getDeltaTime()});
+		}
+
+		// Player collides with Death Zone
+		if (collision.objectB_ID == -6) {
+			auto deathEvent = std::make_shared<DeathEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), collision.objectA_ID);
+			eventManager.QueueEvent(deathEvent);
+		}
+	});
+
+	// Death Event
+	eventManager.RegisterListener(DeathEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+		const auto &death = static_cast<const DeathEvent &> (e);
+
+		// Create Spawn point for the player
+		if (death.entityID % 2 == 0) {
+			auto spawnEvent = std::make_shared<SpawnEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), death.entityID, spawnZone1_Position.x, spawnZone1_Position.y);
+        	eventManager.QueueEvent(spawnEvent);
+		}
+		else {
+			auto spawnEvent = std::make_shared<SpawnEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), death.entityID, spawnZone2_Position.x, spawnZone2_Position.y);
+        	eventManager.QueueEvent(spawnEvent);
+		}
+	});
+
+	// Spawn Event
+	eventManager.RegisterListener(SpawnEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+		const auto &spawn = static_cast<const SpawnEvent &>(e);
+
+		player.setComponent("position", Vector(spawn.x, spawn.y));
+	});
+
+	// Input Event
+	eventManager.RegisterListener(InputEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+		const auto &input = static_cast<const InputEvent &>(e);
+
+		if (input.playerID == player.getComponent<int>("client_id")) {
+			Vector playerVel = player.getComponent<Vector>("velocity");
+
+			switch (input.action) {
+				case UP:
+					player.setComponent("velocity", Vector{playerVel.x, -playerJumpSpeed * timeline.getDeltaTime()});
+					break; 
+
+				case DOWN:
+					player.setComponent("velocity", Vector{playerVel.x, playerSpeed * timeline.getDeltaTime()});
+					break;
+
+				case LEFT:
+					player.setComponent("velocity", Vector{-playerSpeed * timeline.getDeltaTime(), playerVel.y});
+					break;
+
+				case RIGHT:
+					player.setComponent("velocity", Vector{playerSpeed * timeline.getDeltaTime(), playerVel.y});
+					break;
+			}
+		}
+	});
+
 	NetworkManager myNetwork;
 
 	// Start the client
@@ -223,221 +388,217 @@ int main(int argc, char *argv[])
 	}
 	player.setComponent("client_id", myID);
 
-	myNetwork.startClient("localhost", REQUEST_BASE_PORT + myID, SUBSCRIBE_PORT, objectList, objectMutex);
+	myNetwork.startClient("localhost", REPLY_PORT, SUBSCRIBE_PORT, objectList, objectMutex, eventList, eventMutex);
 
-	//////////////////////////////////////////////////
-	//
-	// Multi Threading
-	//
-	//////////////////////////////////////////////////
+	RecordingManager recordingManager(renderer, &eventManager, myID, &masterObjectList, &objectMutex, renderObj);
+
+	// Register Recording events
+	eventManager.RegisterListener(StartRecordingEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+		recordingManager.startRecording();
+	});
+
+	eventManager.RegisterListener(StopRecordingEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+		recordingManager.stopRecording();
+	});
+
+	eventManager.RegisterListener(StartPlaybackEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+		*playingRecording = true;
+		recordingManager.startPlayback();
+	});
+
+	eventManager.RegisterListener(StopPlaybackEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+		*playingRecording = false;
+	});
 
 	// Start Networking Thread
-	std::thread netThread(&networking, &myNetwork, &objectList, &objectMutex, &player);
+	std::thread netThread(&networking, &myNetwork, &objectList, &objectMutex, &player, networkEvents, &numNetworkEvents, &networkEventMutex);
 
 	// Start Rendering Thread
-	std::thread renderThread(&rendering, &objectList, &objectMutex, &player, &localObjects);
+	std::thread renderThread(&rendering, playingRecording, &objectList, &objectMutex, &player, &localObjects);
 
-	std::cout << "Started multi threading" << myID << std::endl;
-
-
-
-	//////////////////////////////////////////////////
-	//
-	// Main Gameplay Loop
-	//
-	//////////////////////////////////////////////////
-
-	// Main game loop condition variable
 	bool running = true;
 
 	// SDL_Event to capture event of window being closed
 	SDL_Event event;
 
-    bool constantSizeScale = true;
+	// Scaling Type bool
+	bool constantSizeScale = true;
 
-    // Start up threads
-    std::thread sendThread(sendPlayerThread, &running, &networkManager, &clientObjectList, &clientObjectListMutex, localEventList, &localEventCt, &localEventMut, clientId);
-    std::thread receiveThread(receiveUpdateThread, &running, &networkManager, &clientObjectList, &clientObjectListMutex);
+	bool justPressedR = false;
+	bool justPressedY = false;
 
-    bool firstLoop = true;
-    int loopSpeed = (int)16 * (1 / mainTimeline.getTimeScale());
+	// The main game loop
+	while (running) {
 
-    while (running)
-    {
-        mainTimeline.update();
-        loopSpeed = (int)16 * (1 / mainTimeline.getTimeScale());
-        std::this_thread::sleep_for(std::chrono::milliseconds(loopSpeed));
+		// Time Line Update
+		timeline.update();
+		float d_time = timeline.getDeltaTime();
 
-        while (SDL_PollEvent(&event))
-        {
-            if (event.type == SDL_EVENT_QUIT)
-                running = false;
+		{
+			std::lock_guard<std::mutex> lock(eventMutex);
 
-            if (isKeyPressed(SDL_SCANCODE_ESCAPE))
-                running = false;
+			for (auto &evt : eventList) {
+				eventManager.QueueEvent(evt);
+			}
 
-            if (event.type == SDL_EVENT_WINDOW_RESIZED)
-            {
-                // Constant Scaling
-                if (constantSizeScale)
-                {
-                    // Resize as if the screen was still the same
-                    SDL_SetRenderLogicalPresentation(renderer, 1920, 1080, SDL_LOGICAL_PRESENTATION_STRETCH);
-                }
-                // Proportional Scaling
-                else
-                {
-                    // Get Window Size
-                    int w, h;
-                    SDL_GetWindowSize(window, &w, &h);
-                    // Resize as if the screen was still the same
-                    SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
-                }
-            }
+			eventList.clear(); // clear after dispatch
+		}
 
-            if (isKeyPressed(SDL_SCANCODE_GRAVE))
-            {
-                constantSizeScale = !constantSizeScale;
-            }
-        }
 
-        std::lock_guard<std::mutex> lock(clientObjectListMutex);
+		// Poll for events
+		while (SDL_PollEvent(&event)) {
 
-        // --- Link to Local Player ---
-        if (!localPlayer)
-        {
-            localPlayer = findGameObjectByClientId(clientId, clientObjectList);
-        }
+			// If event is Window Resize
+			if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+				// Constant Scaling
+				if (constantSizeScale) {
+					// Resize as if the screen was still the same
+					SDL_SetRenderLogicalPresentation(renderer, 1920, 1080, SDL_LOGICAL_PRESENTATION_STRETCH);
+				}
+				// Proportional Scaling
+				else {
+					//Get Window Size
+					int w, h;
+					SDL_GetWindowSize(window, &w, &h);
+					// Resize as if the screen was still the same
+					SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
+				}	
+			}
 
-        if (localPlayer)
-        {
-            if (firstLoop)
-            {
-                auto deathEvent = std::make_shared<DeathEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), clientId);
-                eventManager.QueueEvent(deathEvent);
-                std::lock_guard<std::mutex> lock2(localEventMut);
-                localEventList[localEventCt] = NetworkEvent{3, -1, clientId, -1, -1, -1, deathEvent->timestamp};
-                localEventCt++;
-            }
-            localPlayer->setComponent("velocity", Vector{localPlayer->getComponent<Vector>("velocity").x, 100});
-            if (isKeyPressed(SDL_SCANCODE_A))
-            {
-                auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), 1, clientId);
-                eventManager.QueueEvent(inputEvent);
-                std::lock_guard<std::mutex> lock2(localEventMut);
-                localEventList[localEventCt] = NetworkEvent{2, ACTION_MOVE_LEFT, clientId, -1, -1, -1, inputEvent->timestamp};
-                localEventCt++;
-            }
-            if (isKeyPressed(SDL_SCANCODE_D))
-            {
-                auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), 2, clientId);
-                eventManager.QueueEvent(inputEvent);
-                std::lock_guard<std::mutex> lock2(localEventMut);
-                localEventList[localEventCt] = NetworkEvent{2, ACTION_MOVE_RIGHT, clientId, -1, -1, -1, inputEvent->timestamp};
-                localEventCt++;
-            }
-            if (isKeyPressed(SDL_SCANCODE_SPACE))
-            {
-                auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), 3, clientId);
-                eventManager.QueueEvent(inputEvent);
-                std::lock_guard<std::mutex> lock2(localEventMut);
-                localEventList[localEventCt] = NetworkEvent{2, ACTION_JUMP, clientId, -1, -1, -1, inputEvent->timestamp};
-                localEventCt++;
-            }
+			// Read input from input manager
+			// If the event is close the window
+			if (event.type == SDL_EVENT_QUIT)
+				running = false;
 
-            Vector cameraPos = cameraObject->getComponent<Vector>("position");
-            Vector playerPos = localPlayer->getComponent<Vector>("position");
+			// Otherwise look for a key press
+			else if (event.type == SDL_EVENT_KEY_DOWN) {
+				// Testing to allow the keypress of "ESC" to exit the window.
+				if (isKeyPressed(SDL_SCANCODE_ESCAPE)) {								// Quit
+					running = false;
+				}
+			}
+		}
 
-            float xDifference = playerPos.x - cameraPos.x - (SCREEN_W / 2.0f);
-            cameraPos.x += xDifference * 0.05f;
+		// Player Movement
+		Vector vel = player.getComponent<Vector>("velocity");
+		if (isKeyPressed(SDL_SCANCODE_W) || isKeyPressed(SDL_SCANCODE_SPACE)) {	// Jump
+			{
+				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), UP, myID);
+				eventManager.QueueEvent(inputEvent);
 
-            float yDifference = playerPos.y - cameraPos.y - (SCREEN_H / 2.0f);
-            cameraPos.y += yDifference * 0.05f;
+				std::lock_guard<std::mutex> lock(networkEventMutex);
+				networkEvents[numNetworkEvents] = NetworkEvent {2, UP, myID, -1, -1, -1, inputEvent->timestamp};
+			}
+		}
+		if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
+			{
+				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), LEFT, myID);
+				eventManager.QueueEvent(inputEvent);
 
-            if (cameraPos.x < 0.0f)
-                cameraPos.x = 0.0f;
-            if (cameraPos.y < 0.0f)
-                cameraPos.y = 0.0f;
-            if (cameraPos.x > WORLD_WIDTH - SCREEN_W)
-                cameraPos.x = WORLD_WIDTH - SCREEN_W;
-            if (cameraPos.y > WORLD_HEIGHT - SCREEN_H)
-                cameraPos.y = WORLD_HEIGHT - SCREEN_H;
+				std::lock_guard<std::mutex> lock(networkEventMutex);
+				networkEvents[numNetworkEvents] = NetworkEvent {2, LEFT, myID, -1, -1, -1, inputEvent->timestamp};
+			}
+		}
+		if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
+			{
+				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), DOWN, myID);
+				eventManager.QueueEvent(inputEvent);
 
-            cameraObject->setComponent("position", cameraPos);
-        }
+				std::lock_guard<std::mutex> lock(networkEventMutex);
+				networkEvents[numNetworkEvents] = NetworkEvent {2, DOWN, myID, -1, -1, -1, inputEvent->timestamp};
+			}
+		}
+		if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
+			{
+				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), RIGHT, myID);
+				eventManager.QueueEvent(inputEvent);
 
-        if (localPlayer->hasComponent("position") && localPlayer->hasComponent("dimensions") && platform->hasComponent("position") && platform->hasComponent("dimensions") && overlappingColliders1(*localPlayer, *platform))
-        {
-            auto collisionEvent = std::make_shared<CollisionEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), clientId, platform->getComponent<int>("object_id"));
-            eventManager.QueueEvent(collisionEvent);
-            std::lock_guard<std::mutex> lock2(localEventMut);
-            localEventList[localEventCt] = NetworkEvent{1, -1, clientId, -3, -1, -1, collisionEvent->timestamp};
-            localEventCt++;
-        }
-        // If collision with death zone, respawn player
-        if (localPlayer->hasComponent("position") && localPlayer->hasComponent("dimensions") && overlappingColliders1(*localPlayer, *deathZone))
-        {
-            auto collisionEvent = std::make_shared<CollisionEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), clientId, -2);
-            eventManager.QueueEvent(collisionEvent);
-            std::lock_guard<std::mutex> lock2(localEventMut);
-            localEventList[localEventCt] = NetworkEvent{1, -1, clientId, -2, -1, -1, collisionEvent->timestamp};
-            localEventCt++;
-        }
-        eventManager.ProcessEvents(std::chrono::steady_clock::now().time_since_epoch().count());
+				std::lock_guard<std::mutex> lock(networkEventMutex);
+				networkEvents[numNetworkEvents] = NetworkEvent {2, RIGHT, myID, -1, -1, -1, inputEvent->timestamp};
+			}
+		}
 
-        localPlayer->setComponent("position", Vector{localPlayer->getComponent<Vector>("position").x, localPlayer->getComponent<Vector>("position").y + localPlayer->getComponent<Vector>("velocity").y * mainTimeline.getTimeScale() * mainTimeline.getDeltaTime()});
+		// Recording Input
+		if (isKeyPressed(SDL_SCANCODE_R)) {
+			
+			if (!justPressedR) {
+				justPressedR = true;
 
-        setupScreen(renderer);
-        {
-            Vector cameraPos = cameraObject->getComponent<Vector>("position");
-            for (auto &obj : clientObjectList)
-            {
-                if (!obj->hasComponent("texture"))
-                {
-                    if (obj->hasComponent("is_player"))
-                        obj->setComponent("texture", playerTexture);
-                    else if (obj->hasComponent("is_platform"))
-                        obj->setComponent("texture", platformTexture);
-                }
-                if (obj->hasComponent("texture") && obj->hasComponent("position") && obj->hasComponent("dimensions"))
-                {
-                    SDL_Texture *tex = obj->getComponent<SDL_Texture *>("texture");
-                    Vector pos = obj->getComponent<Vector>("position");
-                    Vector dim = obj->getComponent<Vector>("dimensions");
+				auto startRecordEvent = std::make_shared<StartRecordingEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+				eventManager.QueueEvent(startRecordEvent);
+			}
+			// fire events for holding			
+		}
+		else justPressedR = false;
 
-                    float screenX = pos.x - cameraPos.x - (dim.x / 2.0f);
-                    float screenY = pos.y - cameraPos.y - (dim.y / 2.0f);
+		if (isKeyPressed(SDL_SCANCODE_T)) {
+			auto stopRecordEvent = std::make_shared<StopRecordingEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+			eventManager.QueueEvent(stopRecordEvent);
+		}
+		if (isKeyPressed(SDL_SCANCODE_Y)) {
+			if (!justPressedY) {
+				justPressedY = true;
+				auto startPlaybackEvent = std::make_shared<StartPlaybackEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+				eventManager.QueueEvent(startPlaybackEvent);
+			}
+		}
+		else justPressedY = false;
 
-                    SDL_FRect destRect = {screenX, screenY, dim.x, dim.y};
-                    SDL_RenderTexture(renderer, tex, NULL, &destRect);
-                }
-            }
-        }
-        {
-            std::lock_guard<std::mutex> lock3(clientEventListMutex);
-            clientEventList.clear();
-        }
-        refreshScreen(renderer);
-        firstLoop = false;
-    }
-    
-    // Clean up
-    running = false;
-    sendThread.join();
-    receiveThread.join();
+		// Add Gravity
+		Vector playerSpeed = player.getComponent<Vector>("velocity");
+		player.setComponent("velocity", Vector {playerSpeed.x, playerSpeed.y + WorldPhysics::getGravity() * d_time});
 
-    SDL_DestroyTexture(playerTexture);
-    SDL_DestroyTexture(platformTexture);
+		// Check Local Platforms
+		if (collidable(&player) && collidable(&platform_1) && collidable(&platform_2) && collidable(&platform_3)) {				
+			if (overlappingColliders1(player, platform_1) || overlappingColliders1(player, platform_2) || overlappingColliders1(player, platform_3)) {				
+				auto collisionEvent = std::make_shared<CollisionEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), myID, platform_1.getComponent<int>("npc_id"));
+				eventManager.QueueEvent(collisionEvent);
+			}
+		}
 
-    for (auto &obj : clientObjectList)
-    {
-        delete obj;
-    }
-    clientObjectList.clear();
+		// Check Death Zones
+		if (collidable(&player) && collidable(&deathZone_1)) {
+			if (overlappingColliders1(player, deathZone_1)) {
+				auto collisionEvent = std::make_shared<CollisionEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), myID, deathZone_1.getComponent<int>("object_id"));
+				eventManager.QueueEvent(collisionEvent);
+			}
+		}
 
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+		// Check Remote Platforms
+		{
+			// Lock, remote objects
+			std::lock_guard<std::mutex> lock(objectMutex);
 
-    return 0;
+			// Check if player is not coliding with anything
+			GameObject *movingPlatformHorizontal = findGameObjectByNpcId(1, objectList);
+			GameObject *movingPlatformVertical = findGameObjectByNpcId(2, objectList);
+
+			// Do we have the remote objects
+			if (movingPlatformHorizontal && movingPlatformVertical) {
+				if (collidable(movingPlatformHorizontal) && collidable(movingPlatformVertical)) {
+					if (overlappingColliders1(player, *movingPlatformHorizontal) || overlappingColliders1(player, *movingPlatformVertical)) {	
+						auto collisionEvent = std::make_shared<CollisionEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), myID, movingPlatformHorizontal->getComponent<int>("npc_id"));
+						eventManager.QueueEvent(collisionEvent);
+					}
+				}
+			}
+		}
+		
+		
+		eventManager.ProcessEvents(std::chrono::steady_clock::now().time_since_epoch().count());
+		
+
+		// Move player and then reset their velocity
+		updatePosition(player, isPaused);
+		player.setComponent("velocity", Vector{0, 0});
+
+		refreshScreen(renderer);
+		
+	}
+
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
+
+	return 0;
 }

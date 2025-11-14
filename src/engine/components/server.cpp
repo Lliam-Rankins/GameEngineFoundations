@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
 
     // Start the server, passing pointers to our game state.
     // This connects the NetworkManager to our master list.
-    if (!serverManager.startServer(REPLY_PORT, PUBLISH_PORT, HANDSHAKE_PORT, 5000,
+    if (!serverManager.startServer(REPLY_PORT, PUBLISH_PORT, HANDSHAKE_PORT, 3,
                                    serverMasterObjectList, serverObjectListMutex))
     {
         std::cerr << "Failed to start the server." << std::endl;

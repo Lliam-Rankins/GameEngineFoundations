@@ -62,6 +62,8 @@
         "stop_token": "cpp",
         "thread": "cpp",
         "set": "cpp",
-        "server_testing": "cpp"
+        "server_testing": "cpp",
+        "csignal": "cpp",
+        "fstream": "cpp"
     }
 }

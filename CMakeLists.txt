@@ -22,6 +22,7 @@ set(COMMON_SOURCES
 set(CLIENT_ONLY_SOURCES
     ./src/engine/components/render.cpp
     ./src/engine/components/input.cpp
+    ./src/engine/components/recording.cpp
 )
 
 add_executable(client

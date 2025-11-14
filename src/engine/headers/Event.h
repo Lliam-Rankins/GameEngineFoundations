@@ -116,7 +116,7 @@ struct StartRecordingEvent : public Event
         return STATIC_EVENT_TYPE_ID;
     }
 
-    StartRecordingEvent(float ts, int eID)
+    StartRecordingEvent(float ts)
         : Event(ts) {}
 };
 
@@ -131,7 +131,7 @@ struct StopRecordingEvent : public Event
         return STATIC_EVENT_TYPE_ID;
     }
 
-    StopRecordingEvent(float ts, int eID)
+    StopRecordingEvent(float ts)
         : Event(ts) {}
 };
 
@@ -146,7 +146,7 @@ struct StartPlaybackEvent : public Event
         return STATIC_EVENT_TYPE_ID;
     }
 
-    StartPlaybackEvent(float ts, int eID)
+    StartPlaybackEvent(float ts)
         : Event(ts) {}
 };
 
