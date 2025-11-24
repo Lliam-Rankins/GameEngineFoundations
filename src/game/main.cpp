@@ -12,6 +12,7 @@
 #include "../engine/headers/gameUtils.h"
 #include "../engine/headers/EventManager.h"
 #include "../engine/headers/recording.h"
+#include "../engine/headers/GameObjectPool.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -344,6 +345,19 @@ int main(int argc, char* argv[])
 	// Time Line Setup
 	Timeline timeline;
 
+
+	////////////////////
+	//`Pool Setup
+	////////////////////
+	GameObjectPool *objectPool = new GameObjectPool(sizeof(GameObject), 5);
+	GameObject *go = objectPool->spawn();
+	go->setComponent("is_npc", true);
+	go->setComponent("position", Vector{700, 600});
+
+	localObjects.push_back(go);
+	
+
+
 	////////////////////
 	//`Event Setup
 	////////////////////
@@ -518,6 +532,8 @@ int main(int argc, char* argv[])
 
 	// The main game loop
 	while (running) {
+
+		renderObj(go, Vector{0, 0});
 
 		// std::cout << eventList.size() << std::endl;
 

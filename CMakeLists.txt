@@ -20,6 +20,8 @@ add_executable(client
     ./src/engine/components/GameObject.cpp
     ./src/engine/components/EventManager.cpp
     ./src/engine/components/recording.cpp
+    ./src/engine/components/GameObjectPool.cpp
+    ./src/engine/components/CustomAllocator.cpp
 )
 
 target_compile_definitions(client PRIVATE IS_CLIENT)
@@ -47,5 +49,3 @@ add_custom_command(
 
 target_link_libraries(client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
 target_link_libraries(server PRIVATE cppzmq)
-
-
