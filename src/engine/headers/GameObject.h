@@ -25,7 +25,15 @@ using Component = std::variant<int, float, bool, SDL_Color, SDL_Texture*, std::s
 class GameObject {
 public:
     // The map that stores the object's components.
-    std::map<std::string, Component> components;
+    std::map<std::string, Component> *components;
+
+    GameObject() {
+        components = new std::map<std::string, Component>;
+    }
+
+    GameObject(std::map<std::string, Component> *components) {
+        this->components = components;
+    }
 
     /**
      * @brief Sets or updates a component on the GameObject.
@@ -43,7 +51,7 @@ public:
     template <typename T>
     T getComponent(const std::string& key) {
         // Template implementations must be in the header file.
-        return std::get<T>(components.at(key));
+        return std::get<T>(components->at(key));
     }
 
     /**
@@ -59,10 +67,11 @@ public:
      * after providing the game objects header
      */
     GameObject clone() const {
-        GameObject copy;
-        for (const auto& [key, value] : components) {
-            copy.components[key] = value;
+        GameObject copy = GameObject();
+        for (const auto& [key, value] : *components) {
+            (*copy.components)[key] = value;
         }
         return copy;
     }
+
 };
