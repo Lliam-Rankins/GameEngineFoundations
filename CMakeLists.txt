@@ -24,6 +24,23 @@ add_executable(client
     ./src/engine/components/CustomAllocator.cpp
 )
 
+add_executable(heck
+    ./src/game/projectileHeck.cpp
+    ./src/engine/components/render.cpp
+    ./src/engine/components/input.cpp
+    ./src/engine/components/entities.cpp
+    ./src/engine/components/physics.cpp
+    ./src/engine/components/mathEngine.cpp
+    ./src/engine/components/collisions.cpp
+    ./src/engine/components/network.cpp
+    ./src/engine/components/timeline.cpp
+    ./src/engine/components/GameObject.cpp
+    ./src/engine/components/EventManager.cpp
+    ./src/engine/components/recording.cpp
+    ./src/engine/components/GameObjectPool.cpp
+    ./src/engine/components/CustomAllocator.cpp
+)
+
 target_compile_definitions(client PRIVATE IS_CLIENT)
 
 add_executable(server
@@ -48,4 +65,5 @@ add_custom_command(
 )
 
 target_link_libraries(client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
+target_link_libraries(heck PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
 target_link_libraries(server PRIVATE cppzmq)
