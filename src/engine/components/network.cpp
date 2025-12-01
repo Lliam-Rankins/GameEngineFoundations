@@ -367,7 +367,7 @@ void NetworkManager::update()
         else
         {
             // This NPC already exists. Update its network target position for interpolation.
-            obj->setComponent("position", Vector(npcState.x, npcState.y));
+            obj->setComponent("net_position", Vector(npcState.x, npcState.y));
         }
     }
     // --- Process Events ---
