@@ -116,7 +116,7 @@ struct StartRecordingEvent : public Event
         return STATIC_EVENT_TYPE_ID;
     }
 
-    StartRecordingEvent(float ts, int eID)
+    StartRecordingEvent(float ts)
         : Event(ts) {}
 };
 
@@ -131,7 +131,7 @@ struct StopRecordingEvent : public Event
         return STATIC_EVENT_TYPE_ID;
     }
 
-    StopRecordingEvent(float ts, int eID)
+    StopRecordingEvent(float ts)
         : Event(ts) {}
 };
 
@@ -146,7 +146,22 @@ struct StartPlaybackEvent : public Event
         return STATIC_EVENT_TYPE_ID;
     }
 
-    StartPlaybackEvent(float ts, int eID)
+    StartPlaybackEvent(float ts)
+        : Event(ts) {}
+};
+
+/**
+ * Start Playback event struct
+ */
+struct StopPlaybackEvent : public Event
+{
+    static const EventTypeID STATIC_EVENT_TYPE_ID;
+    virtual EventTypeID GetEventTypeID() const override
+    {
+        return STATIC_EVENT_TYPE_ID;
+    }
+
+    StopPlaybackEvent(float ts)
         : Event(ts) {}
 };
 
