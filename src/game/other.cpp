@@ -25,7 +25,7 @@ SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
 
 // Window Variables
-Vector windowSize = {720, 540};
+Vector windowSize = {800, 800};
 
 
 ///////////////////////////
@@ -33,17 +33,19 @@ Vector windowSize = {720, 540};
 ///////////////////////////
 
 // Player
-Vector player_Position = {100, 100};
-Vector player_Dimensions;
-SDL_Texture* player_Texture;
+Vector player_Position = {800, 800};
+Vector player_dimensions;
+SDL_Texture* player_texture;
 Vector player_Velocity = {0, 0};
-SDL_Texture* playerTex;
+int player_tp_distance = 200;
+float playerSpeed = 300.0;
 
-// Platforms
-Vector platform1_Position = {100, 400};
-Vector platform2_Position = {400, 400};
-Vector platform3_Position = {700, 400};
+// Door
+Vector door_position = {700, 350};
+SDL_Texture* door_texture;
+Vector door_dimensions;
 
+// Orb
 SDL_Texture* orb_texture;
 Vector orb_dimensions;
 
@@ -51,15 +53,7 @@ Vector orb_dimensions;
 Vector spawnZone1_Position = {100, 100};
 Vector spawnZone2_Position = {700, 100};
 
-// DeathZones
-Vector deathZone1_Position = {100, 900};
-Vector deathZone1_Dimensions = {700, 100};
 
-// Game Vars
-float playerSpeed = 300.0;
-float playerJumpSpeed = 300.0;
-
-int gravity = 200;
 
 bool isPaused = false;
 
@@ -77,10 +71,10 @@ bool isPaused = false;
 // Input Enum
 enum Direction {
     UP,
-    DOWN,
-	LEFT,
+    LEFT,
+	DOWN,
 	RIGHT,
-	FAR_LEFT
+	LEFT_TP
 };
 
 // Texture valid check
@@ -138,6 +132,23 @@ void printList(std::vector<GameObject *> *objectList) {
 	}
 }
 
+void spawnBullet(GameObjectPool* objectPool, std::vector<GameObject *> *objectList, std::mutex *objectMutex) {
+	{
+		// Lock
+		std::lock_guard<std::mutex> lock(*objectMutex);
+
+		Vector vel = Vector {-(float)rand() / RAND_MAX, 2 * ((float)rand() / RAND_MAX) - 1};
+		vel.x = vel.x * 300;
+		vel.y = vel.y * 300;
+		
+		GameObject * gameObject = objectPool->spawn(Vector{door_position.x + door_dimensions.x / 2, door_position.y + door_dimensions.y / 2}, vel);
+		gameObject->setComponent("texture", orb_texture);
+		gameObject->setComponent("dimensions", Vector{orb_dimensions});
+
+		objectList->push_back(gameObject);
+	}
+}
+
 
 
 //////////////////////////////////////////////////
@@ -147,7 +158,7 @@ void printList(std::vector<GameObject *> *objectList) {
 /////////////////\/////////////////////////////////
 
 // Rendering Thread
-void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *player, std::vector<GameObject *> *localObjectList) {
+void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex) {
 	// Loop Forever
 	while (true) {
         // Setup the Screen
@@ -157,19 +168,9 @@ void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex, G
             // Lock, rendering remote objects
             std::lock_guard<std::mutex> lock(*objectMutex);
 
-            // Get Player Position for offsetting others
-            Vector offset = player->getComponent<Vector>("position");
-
-
             // Render Local Objects
-            for (const auto &object : *localObjectList) {
-                renderObj(object, offset);
-            }
-
-            // Render Each Object
             for (const auto &object : *objectList) {
-                if (object->hasComponent("client_id") && object->getComponent<int>("client_id") == player->getComponent<int>("client_id")) continue;
-                renderObj(object, offset);
+                renderObj(object, Vector{0, 0});
             }
 		}
 
@@ -199,43 +200,48 @@ int main(int argc, char* argv[])
 
 
 	//Load Textures
-	player_Texture = IMG_LoadTexture(renderer, "../media/darkworld_character_morwen_idle.png");
-	texCheck(player_Texture);
+	player_texture = IMG_LoadTexture(renderer, "../media/darkworld_enemy_skullduggery_idle.png");
+	texCheck(player_texture);
 
-	orb_texture = IMG_LoadTexture(renderer, "../media/darkworld_platform_brick_idle.png");
+    door_texture = IMG_LoadTexture(renderer, "../media/darkworld_spawn_doorwaytolimbo.png");
+	texCheck(door_texture);
+
+	orb_texture = IMG_LoadTexture(renderer, "../media/darkworld_spawn_swirlingorb.png");
 	texCheck(orb_texture);
 
 
 
 	// Create Dimensions
-	player_Dimensions = {player_Texture->w, player_Texture->h};
+	player_dimensions = {player_texture->w, player_texture->h};
+    door_dimensions = {door_texture->w, door_texture->h};
 	orb_dimensions = {orb_texture->w, orb_texture->h};
 
 
+    // Adjust Starting Pos
+    door_position = Vector{windowSize.x - door_dimensions.x, (windowSize.y / 2) - (door_dimensions.y / 2)};
+    player_Position = Vector{0, (windowSize.y / 2) - (player_dimensions.y / 2)};
+    spawnZone1_Position = player_Position;
+
 	// Instantiate ObjectList
-	std::vector<std::vector<GameObject *> *> masterObjectList;
-    std::vector<GameObject *> objectList;
 	std::vector<GameObject *> objects;
     std::mutex objectMutex;
 
-	masterObjectList.push_back(&objectList);
-	masterObjectList.push_back(&objects);
-
 	// Player
-	GameObject player;
+	GameObject player = GameObject();
 	player.setComponent("position", player_Position);
+	player.setComponent("starting_pos", player_Position);
     player.setComponent("id", 0);
 	player.setComponent("velocity", Vector{0, 0});
-	player.setComponent("dimensions", player_Dimensions);
-	player.setComponent("texture", player_Texture);
+	player.setComponent("dimensions", player_dimensions);
+	player.setComponent("texture", player_texture);
 	player.setComponent("physics", true);
 
 	// Platforms
 	GameObject bullet_spawner = GameObject();
-	bullet_spawner.setComponent("position", platform1_Position);
+	bullet_spawner.setComponent("position", door_position);
 	bullet_spawner.setComponent("id", -1);
-	bullet_spawner.setComponent("dimensions", orb_dimensions);
-	bullet_spawner.setComponent("texture", orb_texture);
+	bullet_spawner.setComponent("dimensions", door_dimensions);
+	bullet_spawner.setComponent("texture", door_texture);
 
 	// Spawn Zones
 	GameObject player_spawner = GameObject();
@@ -245,10 +251,6 @@ int main(int argc, char* argv[])
 	objects.push_back(&player);
 	objects.push_back(&bullet_spawner);
 	objects.push_back(&player_spawner);
-;
-
-	// Setting Gravity
-	WorldPhysics::setGravity(gravity);
 
 	// Time Line Setup
 	Timeline timeline;
@@ -257,12 +259,61 @@ int main(int argc, char* argv[])
 	////////////////////
 	//`Pool Setup
 	////////////////////
-	GameObjectPool *objectPool = new GameObjectPool(sizeof(GameObject), 5);
-	GameObject *go = objectPool->spawn();
-	go->setComponent("is_npc", true);
-	go->setComponent("position", Vector{700, 600});
+	GameObjectPool *objectPool = new GameObjectPool(sizeof(GameObject), 100, &player, door_position);
 
-	objects.push_back(go);
+	////////////////////
+	//`Event Setup
+	////////////////////
+	std::vector<std::shared_ptr<Event>> eventList;
+    std::mutex eventMutex;
+
+	EventManager eventManager;
+
+	// Input Event
+	eventManager.RegisterListener(InputEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+		const auto &input = static_cast<const InputEvent &>(e);
+
+		Vector playerVel = player.getComponent<Vector>("velocity");
+		Vector playerPos = player.getComponent<Vector>("position");
+
+		switch (input.action) {
+			case UP:
+				player.setComponent("velocity", Vector{playerVel.x, -playerSpeed * timeline.getDeltaTime()});
+				break; 
+
+			case DOWN:
+				player.setComponent("velocity", Vector{playerVel.x, playerSpeed * timeline.getDeltaTime()});
+				break;
+
+			case LEFT:
+				player.setComponent("velocity", Vector{-playerSpeed * timeline.getDeltaTime(), playerVel.y});
+				break;
+
+			case RIGHT:
+				player.setComponent("velocity", Vector{playerSpeed * timeline.getDeltaTime(), playerVel.y});
+				break;
+				
+			case LEFT_TP:
+				player.setComponent("position", vectorAdd(playerPos, Vector{-player_tp_distance, 0}));
+				break;
+	}
+	});
+
+
+	///////////////////////
+	//	Input
+	///////////////////////
+	InputManager input(eventManager);
+	
+	// Binding Input
+
+
+	input.bindKey(SDL_SCANCODE_W, 0, InputManager::InputType::Simple);
+	input.bindKey(SDL_SCANCODE_A, 1, InputManager::InputType::SingleComplex);
+	input.bindKey(SDL_SCANCODE_S, 2, InputManager::InputType::Simple);
+	input.bindKey(SDL_SCANCODE_D, 3, InputManager::InputType::Simple);
+
+	input.bindChord({SDL_SCANCODE_A, SDL_SCANCODE_LSHIFT}, 4);
 
 	std::cout << "Setup" << std::endl;
 
@@ -273,7 +324,7 @@ int main(int argc, char* argv[])
 	//////////////////////////////////////////////////
 
 	// Start Rendering Thread
-	std::thread renderThread(&rendering, &objectList, &objectMutex, &player, &objects);
+	std::thread renderThread(&rendering, &objects, &objectMutex);
 
 	std::cout << "Started multi threading" << std::endl;
 
@@ -287,15 +338,10 @@ int main(int argc, char* argv[])
 
 	// Main game loop condition variable
 	bool running = true;
+	long time_since_spawn = 0;
 
 	// SDL_Event to capture event of window being closed
 	SDL_Event event;
-
-	// Scaling Type bool
-	bool constantSizeScale = true;
-
-	bool justPressed1 = false;
-	bool justPressed3 = false;
 
 	// The main game loop
 	while (running) {
@@ -303,24 +349,20 @@ int main(int argc, char* argv[])
 		timeline.update();
 		float d_time = timeline.getDeltaTime();
 
+		// Check inputs
+		input.update();
+		eventManager.ProcessEvents(std::chrono::steady_clock::now().time_since_epoch().count());
+
 		// Poll for events
 		while (SDL_PollEvent(&event)) {
 
 			// If event is Window Resize
 			if (event.type == SDL_EVENT_WINDOW_RESIZED) {
-				// Constant Scaling
-				if (constantSizeScale) {
-					// Resize as if the screen was still the same
-					SDL_SetRenderLogicalPresentation(renderer, 1080, 1080, SDL_LOGICAL_PRESENTATION_STRETCH);
-				}
-				// Proportional Scaling
-				else {
-					//Get Window Size
-					int w, h;
-					SDL_GetWindowSize(window, &w, &h);
-					// Resize as if the screen was still the same
-					SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
-				}	
+                //Get Window Size
+                int w, h;
+                SDL_GetWindowSize(window, &w, &h);
+                // Resize as if the screen was still the same
+                SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
 			}
 
 			// Read input from input manager
@@ -328,28 +370,27 @@ int main(int argc, char* argv[])
 			if (event.type == SDL_EVENT_QUIT)
 				running = false;
 
-			// Otherwise look for a key press
-			else if (event.type == SDL_EVENT_KEY_DOWN) {
-				// Testing to allow the keypress of "ESC" to exit the window.
-				if (isKeyPressed(SDL_SCANCODE_ESCAPE)) {								// Quit
-					running = false;
-				}
-
-				// Change Scaling Mode
-				if (isKeyPressed(SDL_SCANCODE_GRAVE)) {									// Change Scaling Mode
-					constantSizeScale = !constantSizeScale;
-				}
-			}
+			// // Otherwise look for a key press
+			// else if (event.type == SDL_EVENT_KEY_DOWN) {
+			// 	// Testing to allow the keypress of "ESC" to exit the window.
+			// 	if (i) {								// Quit
+			// 		running = false;
+			// 	}
+			// }
 		}
 
 		//////////////////////////////////////////////////
 		//
 		// Gameplay Updates
 		//
-		//////////////////////////////////////////////////
+		//////////////////////////////////////////////////		
+		if (objectPool->getActiveCount() < objectPool->getCapacity() && timeline.getElapsedTicks() - time_since_spawn > 5) {
 
-
-
+			spawnBullet(objectPool, &objects, &objectMutex);
+			time_since_spawn = timeline.getElapsedTicks();
+		}
+		
+		objectPool->update(d_time);
 
 
 		//////////////////////////////////////////////////
@@ -358,30 +399,35 @@ int main(int argc, char* argv[])
 		//
 		//////////////////////////////////////////////////
 		// Player Movement
-		Vector vel = player.getComponent<Vector>("velocity");
-		if (isKeyPressed(SDL_SCANCODE_W) || isKeyPressed(SDL_SCANCODE_SPACE)) {	// Jump
-			// Move Up
-		}
-		if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
-			// Move Left
-		}
-		if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
-			// Move Down
-		}
-		if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
-			// Move Right
-		}
+		// Vector vel = player.getComponent<Vector>("velocity");
+		// if (isKeyPressed(SDL_SCANCODE_W)) {	// Jump
+        //     // Move Up
+        //     vel = vectorAdd(vel, Vector{0, -playerSpeed * d_time});
+		// }
+		// if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
+		// 	// Move Left
+        //     vel = vectorAdd(vel, Vector{-playerSpeed * d_time, 0});
+		// }
+		// if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
+		// 	// Move Down
+        //     vel = vectorAdd(vel, Vector{0, playerSpeed * d_time});
+		// }
+		// if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
+		// 	// Move Right
+        //     vel = vectorAdd(vel, Vector{playerSpeed * d_time, 0});
+		// }
 
-		// Add Gravity
-		Vector playerSpeed = player.getComponent<Vector>("velocity");
-		player.setComponent("velocity", Vector {playerSpeed.x, playerSpeed.y + WorldPhysics::getGravity() * d_time});
+        // player.setComponent("velocity", vel);
+
 
 		//////////////////////////////////////////////////
 		//
 		// Collisions
 		//
 		//////////////////////////////////////////////////
-		
+		if (overlappingColliders1(player, bullet_spawner)) {
+			running = false;
+		}
 		
 				
 

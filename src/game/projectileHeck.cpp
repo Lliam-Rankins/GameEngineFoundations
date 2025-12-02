@@ -33,13 +33,15 @@ Vector windowSize = {800, 800};
 ///////////////////////////
 
 // Player
-Vector player_Position = {100, 350};
+Vector player_Position = {800, 800};
 Vector player_dimensions;
 SDL_Texture* player_texture;
 Vector player_Velocity = {0, 0};
+int player_tp_distance = 200;
+float playerSpeed = 300.0;
 
 // Door
-Vector door_Position = {700, 350};
+Vector door_position = {700, 350};
 SDL_Texture* door_texture;
 Vector door_dimensions;
 
@@ -51,9 +53,7 @@ Vector orb_dimensions;
 Vector spawnZone1_Position = {100, 100};
 Vector spawnZone2_Position = {700, 100};
 
-// Game Vars
-float playerSpeed = 300.0;
-float playerJumpSpeed = 300.0;
+
 
 bool isPaused = false;
 
@@ -71,10 +71,10 @@ bool isPaused = false;
 // Input Enum
 enum Direction {
     UP,
-    DOWN,
-	LEFT,
+    LEFT,
+	DOWN,
 	RIGHT,
-	FAR_LEFT
+	LEFT_TP
 };
 
 // Texture valid check
@@ -129,6 +129,23 @@ void printList(std::vector<GameObject *> *objectList) {
 		if (obj->hasComponent("client_id")) {
 			std::cout << "Client Id:" << obj->getComponent<int>("client_id") << std::endl;
 		}
+	}
+}
+
+void spawnBullet(GameObjectPool* objectPool, std::vector<GameObject *> *objectList, std::mutex *objectMutex) {
+	{
+		// Lock
+		std::lock_guard<std::mutex> lock(*objectMutex);
+
+		Vector vel = Vector {-(float)rand() / RAND_MAX, 2 * ((float)rand() / RAND_MAX) - 1};
+		vel.x = vel.x * 300;
+		vel.y = vel.y * 300;
+		
+		GameObject * gameObject = objectPool->spawn(Vector{door_position.x + door_dimensions.x / 2, door_position.y + door_dimensions.y / 2}, vel);
+		gameObject->setComponent("texture", orb_texture);
+		gameObject->setComponent("dimensions", Vector{orb_dimensions});
+
+		objectList->push_back(gameObject);
 	}
 }
 
@@ -201,7 +218,7 @@ int main(int argc, char* argv[])
 
 
     // Adjust Starting Pos
-    door_Position = Vector{windowSize.x - door_dimensions.x, (windowSize.y / 2) - (door_dimensions.y / 2)};
+    door_position = Vector{windowSize.x - door_dimensions.x, (windowSize.y / 2) - (door_dimensions.y / 2)};
     player_Position = Vector{0, (windowSize.y / 2) - (player_dimensions.y / 2)};
     spawnZone1_Position = player_Position;
 
@@ -212,6 +229,7 @@ int main(int argc, char* argv[])
 	// Player
 	GameObject player = GameObject();
 	player.setComponent("position", player_Position);
+	player.setComponent("starting_pos", player_Position);
     player.setComponent("id", 0);
 	player.setComponent("velocity", Vector{0, 0});
 	player.setComponent("dimensions", player_dimensions);
@@ -220,7 +238,7 @@ int main(int argc, char* argv[])
 
 	// Platforms
 	GameObject bullet_spawner = GameObject();
-	bullet_spawner.setComponent("position", door_Position);
+	bullet_spawner.setComponent("position", door_position);
 	bullet_spawner.setComponent("id", -1);
 	bullet_spawner.setComponent("dimensions", door_dimensions);
 	bullet_spawner.setComponent("texture", door_texture);
@@ -241,12 +259,61 @@ int main(int argc, char* argv[])
 	////////////////////
 	//`Pool Setup
 	////////////////////
-	GameObjectPool *objectPool = new GameObjectPool(sizeof(GameObject), 20);
-	// GameObject *bullet = objectPool->spawn();
-	// bullet->setComponent("is_npc", true);
-	// bullet->setComponent("position", Vector{700, 600});
+	GameObjectPool *objectPool = new GameObjectPool(sizeof(GameObject), 100, &player, door_position);
 
-	// objects.push_back(bullet);
+	////////////////////
+	//`Event Setup
+	////////////////////
+	std::vector<std::shared_ptr<Event>> eventList;
+    std::mutex eventMutex;
+
+	EventManager eventManager;
+
+	// Input Event
+	eventManager.RegisterListener(InputEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+		const auto &input = static_cast<const InputEvent &>(e);
+
+		Vector playerVel = player.getComponent<Vector>("velocity");
+		Vector playerPos = player.getComponent<Vector>("position");
+
+		switch (input.action) {
+			case UP:
+				player.setComponent("velocity", Vector{playerVel.x, -playerSpeed * timeline.getDeltaTime()});
+				break; 
+
+			case DOWN:
+				player.setComponent("velocity", Vector{playerVel.x, playerSpeed * timeline.getDeltaTime()});
+				break;
+
+			case LEFT:
+				player.setComponent("velocity", Vector{-playerSpeed * timeline.getDeltaTime(), playerVel.y});
+				break;
+
+			case RIGHT:
+				player.setComponent("velocity", Vector{playerSpeed * timeline.getDeltaTime(), playerVel.y});
+				break;
+				
+			case LEFT_TP:
+				player.setComponent("position", vectorAdd(playerPos, Vector{-player_tp_distance, 0}));
+				break;
+	}
+	});
+
+
+	///////////////////////
+	//	Input
+	///////////////////////
+	InputManager input(eventManager);
+	
+	// Binding Input
+
+
+	input.bindKey(SDL_SCANCODE_W, 0, InputManager::InputType::Simple);
+	input.bindKey(SDL_SCANCODE_A, 1, InputManager::InputType::SingleComplex);
+	input.bindKey(SDL_SCANCODE_S, 2, InputManager::InputType::Simple);
+	input.bindKey(SDL_SCANCODE_D, 3, InputManager::InputType::Simple);
+
+	input.bindChord({SDL_SCANCODE_A, SDL_SCANCODE_LSHIFT}, 4);
 
 	std::cout << "Setup" << std::endl;
 
@@ -271,6 +338,7 @@ int main(int argc, char* argv[])
 
 	// Main game loop condition variable
 	bool running = true;
+	long time_since_spawn = 0;
 
 	// SDL_Event to capture event of window being closed
 	SDL_Event event;
@@ -280,6 +348,10 @@ int main(int argc, char* argv[])
 		// Time Line Update
 		timeline.update();
 		float d_time = timeline.getDeltaTime();
+
+		// Check inputs
+		input.update();
+		eventManager.ProcessEvents(std::chrono::steady_clock::now().time_since_epoch().count());
 
 		// Poll for events
 		while (SDL_PollEvent(&event)) {
@@ -298,21 +370,27 @@ int main(int argc, char* argv[])
 			if (event.type == SDL_EVENT_QUIT)
 				running = false;
 
-			// Otherwise look for a key press
-			else if (event.type == SDL_EVENT_KEY_DOWN) {
-				// Testing to allow the keypress of "ESC" to exit the window.
-				if (isKeyPressed(SDL_SCANCODE_ESCAPE)) {								// Quit
-					running = false;
-				}
-			}
+			// // Otherwise look for a key press
+			// else if (event.type == SDL_EVENT_KEY_DOWN) {
+			// 	// Testing to allow the keypress of "ESC" to exit the window.
+			// 	if (i) {								// Quit
+			// 		running = false;
+			// 	}
+			// }
 		}
 
 		//////////////////////////////////////////////////
 		//
 		// Gameplay Updates
 		//
-		//////////////////////////////////////////////////
+		//////////////////////////////////////////////////		
+		if (objectPool->getActiveCount() < objectPool->getCapacity() && timeline.getElapsedTicks() - time_since_spawn > 5) {
 
+			spawnBullet(objectPool, &objects, &objectMutex);
+			time_since_spawn = timeline.getElapsedTicks();
+		}
+		
+		objectPool->update(d_time);
 
 
 		//////////////////////////////////////////////////
@@ -321,28 +399,25 @@ int main(int argc, char* argv[])
 		//
 		//////////////////////////////////////////////////
 		// Player Movement
-		Vector vel = player.getComponent<Vector>("velocity");
-		if (isKeyPressed(SDL_SCANCODE_W)) {	// Jump
-            // Move Up
-            vel = vectorAdd(vel, Vector{0, -playerSpeed * d_time});
-		}
-		if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
-			// Move Left
-            vel = vectorAdd(vel, Vector{-playerSpeed * d_time, 0});
-		}
-		if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
-			// Move Down
-            vel = vectorAdd(vel, Vector{0, playerSpeed * d_time});
-		}
-		if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
-			// Move Right
-            vel = vectorAdd(vel, Vector{playerSpeed * d_time, 0});
-		}
+		// Vector vel = player.getComponent<Vector>("velocity");
+		// if (isKeyPressed(SDL_SCANCODE_W)) {	// Jump
+        //     // Move Up
+        //     vel = vectorAdd(vel, Vector{0, -playerSpeed * d_time});
+		// }
+		// if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
+		// 	// Move Left
+        //     vel = vectorAdd(vel, Vector{-playerSpeed * d_time, 0});
+		// }
+		// if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
+		// 	// Move Down
+        //     vel = vectorAdd(vel, Vector{0, playerSpeed * d_time});
+		// }
+		// if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
+		// 	// Move Right
+        //     vel = vectorAdd(vel, Vector{playerSpeed * d_time, 0});
+		// }
 
-        player.setComponent("velocity", vel);
-
-        std::cout << "Player width: " << player_texture->w << std::endl;
-        std::cout << "Spawner width: " << door_texture->w << std::endl;
+        // player.setComponent("velocity", vel);
 
 
 		//////////////////////////////////////////////////
@@ -350,7 +425,9 @@ int main(int argc, char* argv[])
 		// Collisions
 		//
 		//////////////////////////////////////////////////
-		
+		if (overlappingColliders1(player, bullet_spawner)) {
+			running = false;
+		}
 		
 				
 
