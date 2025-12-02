@@ -201,7 +201,7 @@ void InputManager::processKeys()
 
         if (binding.type == InputType::Simple) {
             // Simple Key Logic
-            if (isPressed(key)) {
+            if (isDown(key)) {
                 auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), binding.actionId, 0);
                 eventManager.QueueEvent(inputEvent);
             }
@@ -215,11 +215,11 @@ void InputManager::processKeys()
             
             bool fire = false;
             // Case 1: Key was released quickly (before timeout)
-            if (isReleased(key) && state.pressTime > 0) {
-                fire = true;
-            } 
+            // if (isPressed(key) && state.pressTime > 0) {
+            //     fire = true;
+            // } 
             // Case 2: Key was held past the timeout window
-            else if (state.pressTime > 0 && (currentTime_ms - state.pressTime >= CHORD_WINDOW_MS)) {
+            if (state.pressTime > 0 && (currentTime_ms - state.pressTime >= CHORD_WINDOW_MS)) {
                 fire = true;
             }
 
@@ -228,13 +228,13 @@ void InputManager::processKeys()
             //     auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), binding.actionId, 0);
             //     eventManager.QueueEvent(inputEvent);
             // }
-            if (fire && !state.consumed) {
+            if (fire) {
                 auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), binding.actionId, 0);
                 eventManager.QueueEvent(inputEvent);
             }
             
             // Reset timer on release OR if key fired
-            if (isReleased(key) || fire) {
+            if (isReleased(key)) {
                 state.pressTime = 0; 
             }
         }
