@@ -13,6 +13,7 @@
 #include "../engine/headers/EventManager.h"
 #include "../engine/headers/recording.h"
 #include "../engine/headers/GameObjectPool.h"
+#include "../engine/headers/ship_bullet_pool.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -33,25 +34,24 @@ Vector windowSize = {800, 800};
 ///////////////////////////
 
 // Player
-Vector player_Position = {800, 800};
+Vector player_Position = {400, 400};
 Vector player_dimensions;
 SDL_Texture* player_texture;
 Vector player_Velocity = {0, 0};
-int player_tp_distance = 200;
-float playerSpeed = 300.0;
-
-// Door
-Vector door_position = {700, 350};
-SDL_Texture* door_texture;
-Vector door_dimensions;
+float playerAcceleration = 5.0;
+float player_turnSpeed = 5;
 
 // Orb
 SDL_Texture* orb_texture;
 Vector orb_dimensions;
 
+// Asteroids
+SDL_Texture* asteroid_texture_big;
+SDL_Texture* asteroid_texture_med;
+SDL_Texture* asteroid_texture_small;
+
 // Spawn Zones
 Vector spawnZone1_Position = {100, 100};
-Vector spawnZone2_Position = {700, 100};
 
 
 
@@ -70,11 +70,11 @@ bool isPaused = false;
 
 // Input Enum
 enum Direction {
-    UP,
-    LEFT,
-	DOWN,
-	RIGHT,
-	LEFT_TP
+    FORWARD,
+    TURN_LEFT,
+	BACK,
+	TURN_RIGHT,
+	SHOOT
 };
 
 // Texture valid check
@@ -132,18 +132,29 @@ void printList(std::vector<GameObject *> *objectList) {
 	}
 }
 
-void spawnBullet(GameObjectPool* objectPool, std::vector<GameObject *> *objectList, std::mutex *objectMutex) {
+Vector orientToVector(float orientation) {
+	return Vector{cos(orientation), sin(orientation)};
+}
+
+void spawnBullet(Ship_Bullet_Pool* bulletPool, std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject* player) {
 	{
 		// Lock
 		std::lock_guard<std::mutex> lock(*objectMutex);
 
-		Vector vel = Vector {-(float)rand() / RAND_MAX, 2 * ((float)rand() / RAND_MAX) - 1};
-		vel.x = vel.x * 300;
-		vel.y = vel.y * 300;
-		
-		GameObject * gameObject = objectPool->spawn(Vector{door_position.x + door_dimensions.x / 2, door_position.y + door_dimensions.y / 2}, vel);
-		gameObject->setComponent("texture", orb_texture);
-		gameObject->setComponent("dimensions", Vector{orb_dimensions});
+		GameObject* gameObject = bulletPool->spawn();
+
+		objectList->push_back(gameObject);
+	}
+}
+
+void spawnAsteroid(GameObjectPool* asteroidPool, std::vector<GameObject *> *objectList, std::mutex *objectMutex) {
+	{
+		// Lock
+		std::lock_guard<std::mutex> lock(*objectMutex);
+
+		// TODO, add logic to spawn asteroid on edge of screen going
+
+		GameObject* gameObject = asteroidPool->spawn(Vector{400, 400}, Vector{0, 0});
 
 		objectList->push_back(gameObject);
 	}
@@ -200,26 +211,25 @@ int main(int argc, char* argv[])
 
 
 	//Load Textures
-	player_texture = IMG_LoadTexture(renderer, "../media/darkworld_enemy_skullduggery_idle.png");
+	player_texture = IMG_LoadTexture(renderer, "../media/space_ship.png");
 	texCheck(player_texture);
-
-    door_texture = IMG_LoadTexture(renderer, "../media/darkworld_spawn_doorwaytolimbo.png");
-	texCheck(door_texture);
 
 	orb_texture = IMG_LoadTexture(renderer, "../media/darkworld_spawn_swirlingorb.png");
 	texCheck(orb_texture);
+
+	asteroid_texture_big = IMG_LoadTexture(renderer, "../media/Card_256.png");
+	asteroid_texture_med = IMG_LoadTexture(renderer, "../media/Card_128.png");
+	asteroid_texture_small = IMG_LoadTexture(renderer, "../media/Card_64.png");
 
 
 
 	// Create Dimensions
 	player_dimensions = {player_texture->w, player_texture->h};
-    door_dimensions = {door_texture->w, door_texture->h};
 	orb_dimensions = {orb_texture->w, orb_texture->h};
 
 
     // Adjust Starting Pos
-    door_position = Vector{windowSize.x - door_dimensions.x, (windowSize.y / 2) - (door_dimensions.y / 2)};
-    player_Position = Vector{0, (windowSize.y / 2) - (player_dimensions.y / 2)};
+    player_Position = Vector{(windowSize.x / 2) - (player_dimensions.x / 2), (windowSize.y / 2) - (player_dimensions.y / 2)};
     spawnZone1_Position = player_Position;
 
 	// Instantiate ObjectList
@@ -230,18 +240,12 @@ int main(int argc, char* argv[])
 	GameObject player = GameObject();
 	player.setComponent("position", player_Position);
 	player.setComponent("starting_pos", player_Position);
+	player.setComponent("orientation", 0);
     player.setComponent("id", 0);
 	player.setComponent("velocity", Vector{0, 0});
 	player.setComponent("dimensions", player_dimensions);
 	player.setComponent("texture", player_texture);
 	player.setComponent("physics", true);
-
-	// Platforms
-	GameObject bullet_spawner = GameObject();
-	bullet_spawner.setComponent("position", door_position);
-	bullet_spawner.setComponent("id", -1);
-	bullet_spawner.setComponent("dimensions", door_dimensions);
-	bullet_spawner.setComponent("texture", door_texture);
 
 	// Spawn Zones
 	GameObject player_spawner = GameObject();
@@ -249,7 +253,6 @@ int main(int argc, char* argv[])
 	player_spawner.setComponent("id", 1);
 
 	objects.push_back(&player);
-	objects.push_back(&bullet_spawner);
 	objects.push_back(&player_spawner);
 
 	// Time Line Setup
@@ -259,7 +262,8 @@ int main(int argc, char* argv[])
 	////////////////////
 	//`Pool Setup
 	////////////////////
-	GameObjectPool *objectPool = new GameObjectPool(sizeof(GameObject), 100, &player, door_position);
+	Ship_Bullet_Pool *player_bullet_pool = new Ship_Bullet_Pool(sizeof(GameObject), 100, &player);
+	GameObjectPool *asteroid_pool = new GameObjectPool(sizeof(GameObject), 20, &player, Vector{0, 0});
 
 	////////////////////
 	//`Event Setup
@@ -275,26 +279,30 @@ int main(int argc, char* argv[])
 
 		Vector playerVel = player.getComponent<Vector>("velocity");
 		Vector playerPos = player.getComponent<Vector>("position");
+		float playerRad = player.getComponent<float>("orientation");
 
+		Vector playerOrient{cos(playerRad), sin(playerRad)};
+
+		// TODO: Account for orientation overflow
 		switch (input.action) {
-			case UP:
-				player.setComponent("velocity", Vector{playerVel.x, -playerSpeed * timeline.getDeltaTime()});
+			case FORWARD:
+				player.setComponent("velocity", vectorAdd(playerVel, Vector{playerOrient.x * playerAcceleration * timeline.getDeltaTime(), playerOrient.y * playerAcceleration * timeline.getDeltaTime()}));
 				break; 
 
-			case DOWN:
-				player.setComponent("velocity", Vector{playerVel.x, playerSpeed * timeline.getDeltaTime()});
+			case BACK:
+				player.setComponent("velocity", vectorSub(playerVel, Vector{playerOrient.x * playerAcceleration * timeline.getDeltaTime(), playerOrient.y * playerAcceleration * timeline.getDeltaTime()}));
 				break;
 
-			case LEFT:
-				player.setComponent("velocity", Vector{-playerSpeed * timeline.getDeltaTime(), playerVel.y});
+			case TURN_LEFT:
+				player.setComponent("orientation", playerRad + player_turnSpeed * timeline.getDeltaTime());
 				break;
 
-			case RIGHT:
-				player.setComponent("velocity", Vector{playerSpeed * timeline.getDeltaTime(), playerVel.y});
+			case TURN_RIGHT:
+				player.setComponent("orientation", playerRad - player_turnSpeed * timeline.getDeltaTime());
 				break;
 				
-			case LEFT_TP:
-				player.setComponent("position", vectorAdd(playerPos, Vector{-player_tp_distance, 0}));
+			case SHOOT:
+				spawnBullet(player_bullet_pool, &objects, &objectMutex, &player);
 				break;
 	}
 	});
@@ -384,13 +392,14 @@ int main(int argc, char* argv[])
 		// Gameplay Updates
 		//
 		//////////////////////////////////////////////////		
-		if (objectPool->getActiveCount() < objectPool->getCapacity() && timeline.getElapsedTicks() - time_since_spawn > 5) {
+		if (asteroid_pool->getActiveCount() < asteroid_pool->getCapacity() && timeline.getElapsedTicks() - time_since_spawn > 5) {
 
-			spawnBullet(objectPool, &objects, &objectMutex);
+			spawnAsteroid(asteroid_pool, &objects, &objectMutex);
 			time_since_spawn = timeline.getElapsedTicks();
 		}
 		
-		objectPool->update(d_time);
+		asteroid_pool->update(d_time);
+		player_bullet_pool->update(d_time);
 
 
 		//////////////////////////////////////////////////
@@ -425,9 +434,9 @@ int main(int argc, char* argv[])
 		// Collisions
 		//
 		//////////////////////////////////////////////////
-		if (overlappingColliders1(player, bullet_spawner)) {
-			running = false;
-		}
+		// if (overlappingColliders1(player, bullet_spawner)) {
+		// 	running = false;
+		// }
 		
 				
 
