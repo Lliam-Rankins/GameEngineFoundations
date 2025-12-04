@@ -3,25 +3,27 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <algorithm> 
+#include <algorithm>
 #include <chrono>
 
-class EventManager; 
+class EventManager;
 
-class InputManager {
+class InputManager
+{
 public:
     // Defines if a key fires on press, or on chord combination
-    enum class InputType {
+    enum class InputType
+    {
         /** Simple Input Type: Fires immediately on press. Not part of any chord. */
         Simple,
         /**
-         * SingleComplex: Part of a chord. Fires on release 
+         * SingleComplex: Part of a chord. Fires on release
          * OR on timeout (only if not 'consumed' by a chord)
-        */
+         */
         SingleComplex
     };
 
-    InputManager(EventManager& evtManager);
+    InputManager(EventManager &evtManager);
 
     /**
      * @brief The main update loop. Called once per frame.
@@ -41,12 +43,17 @@ public:
      * @param keys A vector of scancodes that make up the chord.
      * @param eventName The event to fire.
      */
-    void bindChord(const std::vector<SDL_Scancode>& keys, const int actionId);
+    void bindChord(const std::vector<SDL_Scancode> &keys, const int actionId);
 
+    // Input Checkers
+    bool isPressed(SDL_Scancode code);
+    bool isReleased(SDL_Scancode code);
+    bool isDown(SDL_Scancode code);
 
 private:
     // State & Config
-    struct KeyState {
+    struct KeyState
+    {
         Uint64 pressTime = 0;
         bool consumed = false;
     };
@@ -55,8 +62,8 @@ private:
     static constexpr Uint32 CHORD_WINDOW_MS = 200;
 
     // Member Variables
-    EventManager& eventManager;
-    const bool* keyboardState;
+    EventManager &eventManager;
+    const bool *keyboardState;
     int numKeys;
     std::vector<bool> previousKeyboardState;
     Uint64 currentTime_ms;
@@ -64,12 +71,14 @@ private:
     // Tracks the state (timer, consumed) for all keys that are part of chords
     std::map<SDL_Scancode, KeyState> m_keyStates;
 
-    struct KeyBinding {
+    struct KeyBinding
+    {
         InputType type;
         int actionId;
     };
 
-    struct ChordBinding {
+    struct ChordBinding
+    {
         std::vector<SDL_Scancode> keys;
         int actionId;
     };
@@ -80,18 +89,12 @@ private:
     // Stores all chord bindings
     std::vector<ChordBinding> m_chordBindings;
 
-
     // Private Helper Functions
     void resetKeyStates();
     void savePreviousState();
 
-    // Input Checkers
-    bool isPressed(SDL_Scancode code);
-    bool isReleased(SDL_Scancode code);
-    bool isDown(SDL_Scancode code);
-
     // Logic Processors
-    
+
     /**
      * @brief Updates pressTime for any complex key that was just pressed.
      */

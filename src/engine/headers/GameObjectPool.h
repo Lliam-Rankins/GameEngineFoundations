@@ -2,22 +2,20 @@
 
 #include "GameObject.h"
 #include "CustomAllocator.h"
-#include <new>  // For placement new
+#include <new> // For placement new
 // #include <SDL3/SDL.h>
-
-
-
 
 /**
  * GameObjectPool: Manages a pool of GameObjects using a MemoryPool
  */
-class GameObjectPool {
+class GameObjectPool
+{
 public:
     /**
      * Constructor: Initialize the Game Object pool
      */
     GameObjectPool(int slotSize, int numSlots);
-    
+
     /**
      * Destructor: Cleans up pool resources
      */
@@ -27,7 +25,8 @@ public:
      * Spawn a new game object
      * @return Pointer to new bullet, or nullptr if pool is full
      */
-    GameObject* spawn();
+    GameObject *spawn();
+    void despawn(GameObject *obj);
 
     // TODO: Probably not needed?
     /**
@@ -50,9 +49,9 @@ public:
 
 private:
     CustomAllocator alloc;
-    int* activeIDs;       // Dynamically allocated array of active IDs
-    int activeCount;      // Number of active bullets
-    int capacity;         // Total pool capacity
+    int *activeIDs;  // Dynamically allocated array of active IDs
+    int activeCount; // Number of active bullets
+    int capacity;    // Total pool capacity
 
-    std::map<std::string, Component>* componentsArray;
+    std::map<std::string, Component> *componentsArray;
 };

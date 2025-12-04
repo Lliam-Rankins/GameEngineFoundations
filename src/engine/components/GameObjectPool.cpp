@@ -46,6 +46,39 @@ GameObject* GameObjectPool::spawn() {
     return gameObject;
 }
 
+void GameObjectPool::despawn(GameObject* obj) {
+    // 1. Find the ID associated with this pointer
+    // Since we don't have a direct Pointer->ID map, we search the active list.
+    int foundIndex = -1;
+    int foundID = -1;
+
+    for (int i = 0; i < activeCount; ++i) {
+        int id = activeIDs[i];
+        // Compare the pointer address
+        if (alloc.getPtr(id) == (void*)obj) {
+            foundID = id;
+            foundIndex = i;
+            break;
+        }
+    }
+
+    if (foundIndex == -1) {
+        SDL_Log("Error: Trying to despawn object not managed by this pool!");
+        return;
+    }
+
+    // 2. Destruct the object manually
+    obj->~GameObject();
+
+    // 3. Free the slot in the allocator using the CORRECT method name
+    alloc.freeSlot(foundID); 
+
+    // 4. Remove from activeIDs list (Swap and Pop method for O(1) removal)
+    // Move the last active ID into the slot of the one we just removed
+    activeIDs[foundIndex] = activeIDs[activeCount - 1];
+    activeCount--;
+}
+
 // // TODO: Change 
 // void BulletPool::update(float dt) {
 //     // Iterate through active bullets and update them
