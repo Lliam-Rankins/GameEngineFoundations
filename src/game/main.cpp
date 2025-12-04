@@ -12,6 +12,10 @@
 #include "../engine/headers/gameUtils.h"
 #include "../engine/headers/EventManager.h"
 #include "../engine/headers/recording.h"
+#include "../engine/headers/GameObjectPool.h"
+#include "../engine/headers/gameUtils.h"
+#include "../engine/headers/EventManager.h"
+#include "../engine/headers/recording.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -68,12 +72,22 @@ Vector remoteMovPlat_Pos;
 
 SDL_Texture* playerTex;
 
+
+
+
+//////////////////////////////////////////////////
+//
+// Helper Functions
+//
+//////////////////////////////////////////////////
+
 // Input Enum
 enum Direction {
     UP,
     DOWN,
 	LEFT,
-	RIGHT
+	RIGHT,
+	FAR_LEFT
 };
 
 // Texture valid check
@@ -135,6 +149,23 @@ void renderObj(GameObject *object, Vector offset) {
 	}
 }
 
+
+void printList(std::vector<GameObject *> *objectList) {
+	for (const auto& obj : *objectList) {
+		if (obj->hasComponent("client_id")) {
+			std::cout << "Client Id:" << obj->getComponent<int>("client_id") << std::endl;
+		}
+	}
+}
+
+
+
+//////////////////////////////////////////////////
+//
+// Multithreading
+//
+/////////////////\/////////////////////////////////
+
 // Rendering Thread
 void rendering(bool *playingRecording, std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *player, std::vector<GameObject *> *localObjectList) {
 	// Loop Forever
@@ -193,14 +224,20 @@ void networking(NetworkManager *myNetwork, std::vector<GameObject *> *objectList
 
 		myNetwork->sendPlayerState(myPlayerState);
 
+
 		// Get correct Object List
 		myNetwork->update();
+
+		
+
 
 		// Wait
 		std::this_thread::sleep_for(std::chrono::milliseconds(33));
 	}
 }
 
+//////////////////////////////////////////////////
+//
 // Main Function
 int main(int argc, char* argv[])
 {
@@ -296,12 +333,30 @@ int main(int argc, char* argv[])
 	// Time Line Setup
 	Timeline timeline;
 
+
+	////////////////////
+	//`Pool Setup
+	////////////////////
+	GameObjectPool *objectPool = new GameObjectPool(sizeof(GameObject), 5);
+	GameObject *go = objectPool->spawn();
+	go->setComponent("is_npc", true);
+	go->setComponent("position", Vector{700, 600});
+
+	localObjects.push_back(go);
+	
+
+
+	////////////////////
+	//`Event Setup
+	////////////////////
 	std::vector<std::shared_ptr<Event>> eventList;
     std::mutex eventMutex;
 
 	NetworkEvent networkEvents[32];
     std::mutex networkEventMutex;
 	int numNetworkEvents = 0;
+
+	std::cout << "Setup" << std::endl;
 
 	EventManager eventManager;
 	bool *playingRecording = new bool(false);
@@ -368,10 +423,22 @@ int main(int argc, char* argv[])
 				case RIGHT:
 					player.setComponent("velocity", Vector{playerSpeed * timeline.getDeltaTime(), playerVel.y});
 					break;
+					
+				case FAR_LEFT:
+					player.setComponent("velocity", Vector{-playerSpeed * 30 * timeline.getDeltaTime(), playerVel.y});
+					break;
 			}
 		}
 	});
 
+	std::cout << "Events" << std::endl;
+
+
+
+
+	////////////////////
+	// Network Setup
+	////////////////////
 	NetworkManager myNetwork;
 
 	// Start the client
@@ -390,6 +457,13 @@ int main(int argc, char* argv[])
 
 	myNetwork.startClient("localhost", REPLY_PORT, SUBSCRIBE_PORT, objectList, objectMutex, eventList, eventMutex);
 
+	std::cout << "Network Up" << std::endl;
+
+
+
+	///////////////////////
+	//	Recording Manager
+	///////////////////////
 	RecordingManager recordingManager(renderer, &eventManager, myID, &masterObjectList, &objectMutex, renderObj);
 
 	// Register Recording events
@@ -410,6 +484,12 @@ int main(int argc, char* argv[])
 		*playingRecording = false;
 	});
 
+	//////////////////////////////////////////////////
+	//
+	// Multi Threading
+	//
+	//////////////////////////////////////////////////
+
 	// Start Networking Thread
 	std::thread netThread(&networking, &myNetwork, &objectList, &objectMutex, &player, networkEvents, &numNetworkEvents, &networkEventMutex);
 
@@ -424,11 +504,15 @@ int main(int argc, char* argv[])
 	// Scaling Type bool
 	bool constantSizeScale = true;
 
-	bool justPressedR = false;
-	bool justPressedY = false;
+	bool justPressed1 = false;
+	bool justPressed3 = false;
 
 	// The main game loop
 	while (running) {
+
+		renderObj(go, Vector{0, 0});
+
+		// std::cout << eventList.size() << std::endl;
 
 		// Time Line Update
 		timeline.update();
@@ -438,6 +522,7 @@ int main(int argc, char* argv[])
 			std::lock_guard<std::mutex> lock(eventMutex);
 
 			for (auto &evt : eventList) {
+				std::cout << "Queued network event" << std::endl;
 				eventManager.QueueEvent(evt);
 			}
 
@@ -518,6 +603,47 @@ int main(int argc, char* argv[])
 			}
 		}
 
+		// std::cout << isKeyPressed(SDL_SCANCODE_1) << std::endl;
+
+		// Recording Input
+		if (isKeyPressed(SDL_SCANCODE_1)) {
+			
+			if (!justPressed1) {
+				justPressed1 = true;
+				//fire event for pressing
+				std::cout << "Pressed 1!" << std::endl;
+
+				auto startRecordEvent = std::make_shared<StartRecordingEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+				eventManager.QueueEvent(startRecordEvent);
+			}
+			// fire events for holding			
+		}
+		else justPressed1 = false;
+
+		if (isKeyPressed(SDL_SCANCODE_2)) {
+			auto stopRecordEvent = std::make_shared<StopRecordingEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+			eventManager.QueueEvent(stopRecordEvent);
+		}
+		if (isKeyPressed(SDL_SCANCODE_3)) {
+			if (!justPressed3) {
+				justPressed3 = true;
+
+				std::cout << "Pressed 3!" << std::endl;
+
+				auto startPlaybackEvent = std::make_shared<StartPlaybackEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+				eventManager.QueueEvent(startPlaybackEvent);
+			}
+		}
+		else justPressed3 = false;
+			{
+				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), RIGHT, myID);
+				eventManager.QueueEvent(inputEvent);
+
+				std::lock_guard<std::mutex> lock(networkEventMutex);
+				networkEvents[numNetworkEvents] = NetworkEvent {2, RIGHT, myID, -1, -1, -1, inputEvent->timestamp};
+			}
+		}
+
 		// Recording Input
 		if (isKeyPressed(SDL_SCANCODE_R)) {
 			
@@ -548,6 +674,12 @@ int main(int argc, char* argv[])
 		Vector playerSpeed = player.getComponent<Vector>("velocity");
 		player.setComponent("velocity", Vector {playerSpeed.x, playerSpeed.y + WorldPhysics::getGravity() * d_time});
 
+		//////////////////////////////////////////////////
+		//
+		// Collisions
+		//
+		//////////////////////////////////////////////////
+		
 		// Check Local Platforms
 		if (collidable(&player) && collidable(&platform_1) && collidable(&platform_2) && collidable(&platform_3)) {				
 			if (overlappingColliders1(player, platform_1) || overlappingColliders1(player, platform_2) || overlappingColliders1(player, platform_3)) {				
@@ -592,8 +724,25 @@ int main(int argc, char* argv[])
 		updatePosition(player, isPaused);
 		player.setComponent("velocity", Vector{0, 0});
 
+
+
+
+		//////////////////////////////////////////////////
+		//
+		// Rendering
+		//
+		//////////////////////////////////////////////////			
+		// // Render Local Player
+		player.setComponent("velocity", Vector{0, 0});
+
 		refreshScreen(renderer);
 		
+		// std::cout << "Refresh, end of loop" << std::endl;
+
+		// {
+        //     std::lock_guard<std::mutex> lock(eventMutex);
+        //     eventList.clear();
+        // }
 	}
 
 	SDL_DestroyRenderer(renderer);

@@ -369,9 +369,6 @@ void NetworkManager::update()
             newNpc->setComponent("is_npc", true);
             newNpc->setComponent("npc_id", npcState.objectId);
             newNpc->setComponent("position", Vector(npcState.x, npcState.y));
-            // Set the initial network target position
-            newNpc->setComponent("net_position", Vector(npcState.x, npcState.y));
-            newNpc->setComponent("dimensions", Vector(163.0f, 60.0f));
             m_masterObjectList->push_back(newNpc);
         }
         else

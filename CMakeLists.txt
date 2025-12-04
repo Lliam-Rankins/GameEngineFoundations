@@ -16,24 +16,23 @@ set(COMMON_SOURCES
     ./src/engine/components/collisions.cpp
     ./src/engine/components/network.cpp
     ./src/engine/components/timeline.cpp
+    ./src/engine/components/GameObject.cpp
     ./src/engine/components/EventManager.cpp
-)
-
-set(CLIENT_ONLY_SOURCES
-    ./src/engine/components/render.cpp
-    ./src/engine/components/input.cpp
     ./src/engine/components/recording.cpp
+    ./src/engine/components/GameObjectPool.cpp
+    ./src/engine/components/CustomAllocator.cpp
 )
 
-add_executable(client
-    ./src/game/main.cpp
-    ${COMMON_SOURCES}
-    ${CLIENT_ONLY_SOURCES}
-)
 target_compile_definitions(client PRIVATE IS_CLIENT)
 add_executable(server
-    ./src/engine/components/server.cpp
-    ${COMMON_SOURCES}
+    ./src/game/server.cpp
+    ./src/engine/components/network.cpp
+    ./src/engine/components/entities.cpp
+    ./src/engine/components/timeline.cpp
+    ./src/engine/components/mathEngine.cpp
+    ./src/engine/components/GameObject.cpp
+    ./src/engine/components/EventManager.cpp
+    ./src/engine/components/collisions.cpp
 )
 
 set(MEDIA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/media")
@@ -46,5 +45,5 @@ add_custom_command(
     "${MEDIA_DEST_DIR}"
 )
 
-target_link_libraries(client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq Threads::Threads)
-target_link_libraries(server PRIVATE cppzmq Threads::Threads)
+target_link_libraries(client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
+target_link_libraries(server PRIVATE cppzmq)
