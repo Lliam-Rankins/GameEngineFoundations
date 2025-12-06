@@ -10,6 +10,7 @@
 #include "../engine/headers/EventManager.h"
 #include "../engine/headers/render.h"
 #include "SpaceInvaders/SpaceInvadersGame.h" // Adjust path if needed
+#include "BubbleShooter/BubbleShooter.h"
 
 int main(int argc, char* argv[]) {
     // 1. Initialize SDL and Window (Using your render.cpp helpers)
@@ -29,7 +30,7 @@ int main(int argc, char* argv[]) {
     InputManager input(eventMgr);
 
     // 3. Initialize The Game
-    SpaceInvaders game(renderer, &input, &eventMgr);
+    BubbleShooter game(renderer, &input);
     game.Init();
 
     // 4. The Main Loop

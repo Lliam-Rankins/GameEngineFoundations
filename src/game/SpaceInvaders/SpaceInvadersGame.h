@@ -16,7 +16,7 @@
 #include "../../engine/headers/collisions.h"
 
 // Game Constants
-const int BULLET_POOL_SIZE = 3;
+const int BULLET_POOL_SIZE = 50;
 const int ALIEN_ROWS = 5;
 const int ALIEN_COLS = 11;
 
@@ -47,7 +47,6 @@ private:
     GameObject *m_player;
     std::vector<GameObject *> m_aliens;
 
-    // SECTION 1 REQUIREMENT: Custom Memory Allocator via Pool
     GameObjectPool *m_bulletPool;
     std::vector<GameObject *> m_activeBullets;
 
@@ -61,7 +60,7 @@ private:
     // Helpers
     void SpawnAliens();
     void FireBullet();
-    void TriggerNuke(); // SECTION 2 REQUIREMENT: Chord Ability
+    void TriggerNuke();
     void HandleCollisions();
 
     // Basic Texture creation (placeholders)

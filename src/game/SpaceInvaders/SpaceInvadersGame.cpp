@@ -10,7 +10,7 @@
 
 SpaceInvaders::SpaceInvaders(SDL_Renderer* renderer, InputManager* input, EventManager* eventMgr)
     : m_renderer(renderer), m_input(input), m_eventMgr(eventMgr), 
-      gameOver(false), alienMoveTimer(0), alienMoveInterval(0.5f), alienDirection(1), alienDropdown(false)
+      gameOver(false), alienMoveTimer(0), alienMoveInterval(.1f), alienDirection(1), alienDropdown(false)
 {
     // Initialize the pool
     // Assuming sizeof(GameObject) is the slot size
@@ -87,6 +87,8 @@ void SpaceInvaders::SpawnAliens() {
             alien->setComponent("position", Vector{startX + (col * gapX), startY + (row * gapY)});
             alien->setComponent("dimensions", Vector{30, 20});
             alien->setComponent("active", true); // Custom component to track life
+            // Tag the alien with its row so we can drop specific rows on edge hit
+            alien->setComponent("alien_row", row);
             m_aliens.push_back(alien);
         }
     }
@@ -149,33 +151,42 @@ void SpaceInvaders::Update(float dt) {
     alienMoveTimer += dt;
     if (alienMoveTimer >= alienMoveInterval) {
         alienMoveTimer = 0;
-        bool hitEdge = false;
 
-        // Move all aliens
+        // Track which rows need to drop this tick
+        std::vector<bool> rowShouldDrop(ALIEN_ROWS, false);
+
+        // First pass: move horizontally and detect per-row edge collisions
         for (auto alien : m_aliens) {
             if (!alien->getComponent<bool>("active")) continue;
 
             Vector pos = alien->getComponent<Vector>("position");
-            if (alienDropdown) {
-                pos.y += 20; // Drop down
-            } else {
-                pos.x += 10 * alienDirection;
-            }
+            pos.x += 10 * alienDirection;
             alien->setComponent("position", pos);
 
-            // Check edges
-            if (!alienDropdown) {
-                if (pos.x < 30 || pos.x > WINDOW_WIDTH - 30) {
-                    hitEdge = true;
-                }
+            // Check edges and mark the alien's row for dropping
+            if (pos.x < 30 || pos.x > WINDOW_WIDTH - 30) {
+                int row = alien->getComponent<int>("alien_row");
+                if (row >= 0 && row < ALIEN_ROWS) rowShouldDrop[row] = true;
             }
         }
 
-        if (alienDropdown) {
-            alienDropdown = false; // Finished dropping
-        } else if (hitEdge) {
+        // If any row needs to drop, reverse direction for the formation
+        bool anyDrop = false;
+        for (bool v : rowShouldDrop) if (v) { anyDrop = true; break; }
+
+        if (anyDrop) {
             alienDirection *= -1;
-            alienDropdown = true; // Drop next tick
+
+            // Drop only the rows that hit the edge
+            for (auto alien : m_aliens) {
+                if (!alien->getComponent<bool>("active")) continue;
+                int row = alien->getComponent<int>("alien_row");
+                if (row >= 0 && row < ALIEN_ROWS && rowShouldDrop[row]) {
+                    Vector pos = alien->getComponent<Vector>("position");
+                    pos.y += 20; // Drop down one level for that row
+                    alien->setComponent("position", pos);
+                }
+            }
         }
     }
     

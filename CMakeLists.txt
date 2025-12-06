@@ -25,23 +25,22 @@ set(SPACE_INVADERS_SOURCES
     src/game/SpaceInvaders/SpaceInvadersGame.cpp
 )
 
-# set(BUBBLE_SHOOTER_SOURCES
-#     BubbleShooter/BubbleShooter.cpp
-# )
+set(BUBBLE_SHOOTER_SOURCES
+    src/game/BubbleShooter/BubbleShooter.cpp
+)
 
-# --- 4. Include Directories ---
 # Tells the compiler where to look for .h files
 include_directories(
     headers
     SpaceInvaders
-    # BubbleShooter
+    BubbleShooter
 )
 
 add_executable(${PROJECT_NAME}
     ${ENGINE_SOURCES}
     ${SPACE_INVADERS_SOURCES}
+    ${BUBBLE_SHOOTER_SOURCES}
     src/game/main.cpp
-    # ${BUBBLE_SHOOTER_SOURCES}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3)
