@@ -9,7 +9,7 @@ find_package(SDL3_image REQUIRED)
 find_package(cppzmq REQUIRED)
 
 add_executable(client
-    ./src/game/main.cpp
+    ./src/game/mainClient.cpp
     ./src/engine/components/render.cpp
     ./src/engine/components/input.cpp
     ./src/engine/components/entities.cpp
@@ -17,25 +17,22 @@ add_executable(client
     ./src/engine/components/collisions.cpp
     ./src/engine/components/network.cpp
     ./src/engine/components/timeline.cpp
+    ./src/engine/components/JobSystem.cpp
     ./src/engine/components/GameObject.cpp
     ./src/engine/components/EventManager.cpp
-    ./src/engine/components/recording.cpp
-    ./src/engine/components/GameObjectPool.cpp
-    ./src/engine/components/CustomAllocator.cpp
 )
+
 
 target_compile_definitions(client PRIVATE IS_CLIENT)
 
 add_executable(server
-    ./src/game/server.cpp
+    ./src/game/mainServer.cpp
     ./src/engine/components/network.cpp
-    ./src/engine/components/entities.cpp
     ./src/engine/components/timeline.cpp
-    ./src/engine/components/mathEngine.cpp
     ./src/engine/components/GameObject.cpp
     ./src/engine/components/EventManager.cpp
-    ./src/engine/components/collisions.cpp
 )
+
 
 set(MEDIA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/media")
 set(MEDIA_DEST_DIR "${CMAKE_BINARY_DIR}/media")
@@ -49,3 +46,5 @@ add_custom_command(
 
 target_link_libraries(client PRIVATE SDL3::SDL3 SDL3_image::SDL3_image cppzmq)
 target_link_libraries(server PRIVATE cppzmq)
+
+

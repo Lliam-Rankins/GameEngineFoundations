@@ -29,6 +29,8 @@ public:
      */
     GameObject* spawn();
 
+    void despawn(GameObject *obj);
+
     // TODO: Probably not needed?
     /**
      * Update all active GameObjects
