@@ -303,7 +303,7 @@ int main(int argc, char* argv[])
 	///////////////////////
 	//	Input
 	///////////////////////
-	InputManager input(eventManager);
+	InputManager input(eventManager, 0);
 	
 	// Binding Input
 

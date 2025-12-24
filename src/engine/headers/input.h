@@ -21,7 +21,7 @@ public:
         SingleComplex
     };
 
-    InputManager(EventManager& evtManager);
+    InputManager(EventManager& evtManager, int playerID);
 
     /**
      * @brief The main update loop. Called once per frame.
@@ -60,6 +60,7 @@ private:
     int numKeys;
     std::vector<bool> previousKeyboardState;
     Uint64 currentTime_ms;
+    int playerID;
 
     // Tracks the state (timer, consumed) for all keys that are part of chords
     std::map<SDL_Scancode, KeyState> m_keyStates;

@@ -1,0 +1,691 @@
+  
+  	
+  		
+  				
+  					
+  								std::lock_guard<std::mutex> lock(objectMutex);
+  							{
+  						}
+  					// Resize as if the screen was still the same
+  					//Get Window Size
+  					SDL_GetWindowSize(window, &w, &h);
+  					SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
+  					break;
+  					break; 
+  					int w, h;
+  					}
+  				// Lock, rendering remote objects
+  				// Render Local Objects
+  				break;
+  				break; 
+  				for (const auto &object : *objectList) {
+  				running = false;
+  				std::lock_guard<std::mutex> lock(*objectMutex);
+  				}
+  				}	
+  			// If event is Window Resize
+  			// If the event is close the window
+  			// Read input from input manager
+  			// Setup the Screen
+  			Vector playerVel = player.getComponent<Vector>("velocity");
+  			if (event.type == SDL_EVENT_QUIT)
+  			if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+  			setupScreen(renderer);
+  			std::lock_guard<std::mutex> lock(objectMutex);
+  			switch (input.action) {
+  			{
+  			}
+  		//
+  		// Gameplay Updates
+  		// Move player and then reset their velocity
+  		// Player Movement
+  		// Poll for events
+  		// Rendering
+  		// Time Line Update
+  		// Wait
+  		//////////////////////////////////////////////////
+  		//////////////////////////////////////////////////		
+  		//////////////////////////////////////////////////			
+  		SDL_Texture* tex = object->getComponent<SDL_Texture *>("texture");
+  		Vector playerVel = player.getComponent<Vector>("velocity");
+  		const auto &input = static_cast<const InputEvent &>(e);
+  		float d_time = timeline.getDeltaTime();
+  		refreshScreen(renderer);
+  		return;
+  		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  		switch (input.action) {
+  		timeline.update();
+  		while (SDL_PollEvent(&event)) {
+  		{
+  		}
+  	//
+  	// Create Dimensions
+  	// Create Rectangle to render Obj
+  	// Input Event
+  	// Instantiate ObjectList
+  	// Loop Forever
+  	// Main game loop condition variable
+  	// Object has Color
+  	// Object has Texture
+  	// Only Render Objects with Positions and Dimensions, and a color or texture
+  	// Player
+  	// SDL_Event to capture event of window being closed
+  	// Spawn Zones
+  	// Start Rendering Thread
+  	// The main game loop
+  	// Time Line Setup
+  	////////////////////
+  	///////////////////////
+  	//////////////////////////////////////////////////
+  	//Load Textures
+  	//`Event Setup
+  	//`Pool Setup
+  	EventManager eventManager;
+  	SDL_DestroyRenderer(renderer);
+  	SDL_Event event;
+  	Timeline timeline;
+  	Vector dim = object->getComponent<Vector>("dimensions");
+  	bool running = true;
+  	else if (object->hasComponent("color")) {
+  	eventManager.RegisterListener(InputEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+  	if (!object->hasComponent("position") || !object->hasComponent("dimensions")) {
+  	if (object->hasComponent("texture")) {
+  	player.setComponent("physics", true);
+  	player.setComponent("position", player_Position);
+  	return false;
+  	std::vector<std::shared_ptr<Event>> eventList;
+  	while (running) {
+  	while (true) {
+  	}
+  	});
+                  // Resize as if the screen was still the same
+                  //Get Window Size
+                  SDL_GetWindowSize(window, &w, &h);
+                  SDL_SetRenderLogicalPresentation(renderer, w, h, SDL_LOGICAL_PRESENTATION_STRETCH);
+                  int w, h;
+              // Lock, rendering remote objects
+              // Render Local Objects
+              for (const auto &object : *objectList) {
+              std::lock_guard<std::mutex> lock(*objectMutex);
+              }
+          // Setup the Screen
+          setupScreen(renderer);
+      std::mutex eventMutex;
+      std::mutex objectMutex;
+  #include "../engine/headers/EventManager.h"
+  #include "../engine/headers/GameObjectPool.h"
+  #include "../engine/headers/recording.h"
+  #include <chrono>
+  #include <iostream>
+  #include <thread>
+  // Input Enum
+  // Player
+  // Rendering Thread
+  // Spawn Zones
+  // Texture valid check
+  // Window Variables
+  ///////////////////////////
+  //////////////////////////////////////////////////
+  /////////////////\/////////////////////////////////
+  SDL_Renderer* renderer = nullptr;
+  Vector player_Velocity = {0, 0};
+  Vector spawnZone1_Position = {100, 100};
+  bool isPaused = false;
+  enum Direction {
+  }
+  };
+! 
+! 	
+! 			
+! 					
+! 							
+! 								
+! 								object1->setComponent("position", Vector{rand() % (int)windowSize.x, rand() % (int)windowSize.y});
+! 								object1->setComponent("velocity", Vector{rand() % asteroid_speed, rand() % asteroid_speed});
+! 							// change position and velocity randomly
+! 							}
+! 						// Object 2 is asteroid, check if overlapping
+! 						auto collisionEvent = std::make_shared<CollisionEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), myID, movingPlatformHorizontal->getComponent<int>("npc_id"));
+! 						eventManager.QueueEvent(collisionEvent);
+! 						if (overlappingColliders1(*object1, *object2)) {
+! 						isPaused = false;
+! 						isPaused = true;
+! 						timeline.setTimeScale(0.0);
+! 						timeline.setTimeScale(1.0);
+! 					//Pause
+! 					//Unpause
+! 					Vector pos = object1->getComponent<Vector>("position");
+! 					constantSizeScale = !constantSizeScale;
+! 					else {
+! 					if (isPaused) {
+! 					if (object->hasComponent("client_id") && object->getComponent<int>("client_id") == player->getComponent<int>("client_id")) continue;
+! 					if (object2->hasComponent("isBullet")) {
+! 					if (overlappingColliders1(player, *movingPlatformHorizontal) || overlappingColliders1(player, *movingPlatformVertical)) {	
+! 					if (pos.x < 0) pos.x = windowSize.x;
+! 					if (pos.x > windowSize.x) pos.x = 0;
+! 					if (pos.y < 0) pos.y = windowSize.y;
+! 					if (pos.y > windowSize.y) pos.y = 0;
+! 					object1->setComponent("position", pos);
+! 					player.setComponent("velocity", Vector{-playerSpeed * 30 * timeline.getDeltaTime(), playerVel.y});
+! 					player.setComponent("velocity", Vector{-playerSpeed * timeline.getDeltaTime(), playerVel.y});
+! 					player.setComponent("velocity", Vector{playerSpeed * timeline.getDeltaTime(), playerVel.y});
+! 					player.setComponent("velocity", Vector{playerVel.x, -playerJumpSpeed * timeline.getDeltaTime()});
+! 					player.setComponent("velocity", Vector{playerVel.x, playerSpeed * timeline.getDeltaTime()});
+! 					renderObj(object, offset);
+! 					running = false;
+! 					std::lock_guard<std::mutex> lock(objectMutex);
+! 					timeline.setTimeScale(0.5);
+! 					timeline.setTimeScale(1.0);
+! 					timeline.setTimeScale(2.0);
+! 					}
+! 				//	Asyc
+! 				// Change Scaling Mode
+! 				// Object 1 is bullet
+! 				// Pause
+! 				// Regular Speed
+! 				// Slow down game
+! 				// Speed Up
+! 				// Testing to allow the keypress of "ESC" to exit the window.
+! 				////////////////////////////////
+! 				//fire event for pressing
+! 				auto collisionEvent = std::make_shared<CollisionEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), myID, deathZone_1.getComponent<int>("object_id"));
+! 				auto collisionEvent = std::make_shared<CollisionEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), myID, platform_1.getComponent<int>("npc_id"));
+! 				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), DOWN, myID);
+! 				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), LEFT, myID);
+! 				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), RIGHT, myID);
+! 				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), UP, myID);
+! 				auto startPlaybackEvent = std::make_shared<StartPlaybackEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+! 				auto startRecordEvent = std::make_shared<StartRecordingEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+! 				case DOWN:
+! 				case FAR_LEFT:
+! 				case LEFT:
+! 				case RIGHT:
+! 				case UP:
+! 				eventManager.QueueEvent(collisionEvent);
+! 				eventManager.QueueEvent(evt);
+! 				eventManager.QueueEvent(inputEvent);
+! 				eventManager.QueueEvent(startPlaybackEvent);
+! 				eventManager.QueueEvent(startRecordEvent);
+! 				for (auto object2 : objects) {
+! 				if (collidable(movingPlatformHorizontal) && collidable(movingPlatformVertical)) {
+! 				if (isKeyPressed(SDL_SCANCODE_COMMA)){
+! 				if (isKeyPressed(SDL_SCANCODE_ESCAPE)) {								// Quit
+! 				if (isKeyPressed(SDL_SCANCODE_GRAVE)) {									// Change Scaling Mode
+! 				if (isKeyPressed(SDL_SCANCODE_P)) {
+! 				if (isKeyPressed(SDL_SCANCODE_PERIOD)) {
+! 				if (isKeyPressed(SDL_SCANCODE_SLASH)) {
+! 				justPressed1 = true;
+! 				justPressed3 = true;
+! 				networkEvents[numNetworkEvents] = NetworkEvent {2, DOWN, myID, -1, -1, -1, inputEvent->timestamp};
+! 				networkEvents[numNetworkEvents] = NetworkEvent {2, LEFT, myID, -1, -1, -1, inputEvent->timestamp};
+! 				networkEvents[numNetworkEvents] = NetworkEvent {2, RIGHT, myID, -1, -1, -1, inputEvent->timestamp};
+! 				networkEvents[numNetworkEvents] = NetworkEvent {2, UP, myID, -1, -1, -1, inputEvent->timestamp};
+! 				player.setComponent("orientation", playerRad + player_turnSpeed * timeline.getDeltaTime());
+! 				player.setComponent("orientation", playerRad - player_turnSpeed * timeline.getDeltaTime());
+! 				player.setComponent("velocity", vectorAdd(playerVel, Vector{playerOrient.x * playerAcceleration, playerOrient.y * playerAcceleration}));
+! 				player.setComponent("velocity", vectorSub(playerVel, Vector{playerOrient.x * playerAcceleration, playerOrient.y * playerAcceleration}));
+! 				spawnBullet(player_bullet_pool, &objects, &objectMutex, &player);
+! 				std::cout << "Pressed 1!" << std::endl;
+! 				std::cout << "Pressed 3!" << std::endl;
+! 				std::cout << "Queued network event" << std::endl;
+! 				std::lock_guard<std::mutex> lock(networkEventMutex);
+! 				{
+! 				}
+! 			&pivot,          // center of rotation inside the texture
+! 			&rectangle,      // dst in world coordinates
+! 			// 		running = false;
+! 			// 	// Testing to allow the keypress of "ESC" to exit the window.
+! 			// 	if (i) {								// Quit
+! 			// 	}
+! 			// // Otherwise look for a key press
+! 			// Check if player is not coliding with anything
+! 			// Do we have the remote objects
+! 			// Otherwise look for a key press
+! 			// else if (event.type == SDL_EVENT_KEY_DOWN) {
+! 			// fire events for holding			
+! 			// }
+! 			GameObject *movingPlatformHorizontal = findGameObjectByNpcId(1, objectList);
+! 			GameObject *movingPlatformVertical = findGameObjectByNpcId(2, objectList);
+! 			NULL,            // src = whole texture (IMPORTANT)
+! 			SDL_FLIP_NONE
+! 			Vector pos = player.getComponent<Vector>("position");
+! 			Vector vel = player.getComponent<Vector>("velocity");
+! 			auto stopRecordEvent = std::make_shared<StopRecordingEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+! 			case BACK:
+! 			case FORWARD:
+! 			case SHOOT:
+! 			case TURN_LEFT:
+! 			case TURN_RIGHT:
+! 			else if (event.type == SDL_EVENT_KEY_DOWN) {
+! 			eventList.clear(); // clear after dispatch
+! 			eventManager.QueueEvent(stopRecordEvent);
+! 			float radians = object->getComponent<float>("orientation");
+! 			for (auto &evt : eventList) {
+! 			if (!justPressed1) {
+! 			if (!justPressed3) {
+! 			if (movingPlatformHorizontal && movingPlatformVertical) {
+! 			if (object1->hasComponent("isAsteroid")) {
+! 			if (overlappingColliders1(player, deathZone_1)) {
+! 			if (overlappingColliders1(player, platform_1) || overlappingColliders1(player, platform_2) || overlappingColliders1(player, platform_3)) {				
+! 			if (pos.x < 0) pos.x = windowSize.x;
+! 			if (pos.x > windowSize.x) pos.x = 0;
+! 			if (pos.y < 0) pos.y = windowSize.y;
+! 			if (pos.y > windowSize.y) pos.y = 0;
+! 			orientDeg = radians * (180.0f / M_PI);
+! 			orientDeg,
+! 			pivot = { dim.x / 2.0f, dim.y / 2.0f };  // rotate around center
+! 			player.setComponent("position", Vector{pos.x + (vel.x * timeline.getDeltaTime()), pos.y + (vel.y * timeline.getDeltaTime())});
+! 			player.setComponent("position", pos);
+! 			renderer,
+! 			std::lock_guard<std::mutex> lock(eventMutex);
+! 			std::lock_guard<std::mutex> lock(objectMutex);
+! 			tex,
+! 			{
+! 			}
+! 		);
+! 		*playingRecording = false;
+! 		*playingRecording = true;
+! 		// AI USE END
+! 		// Check Death Zones
+! 		// Check Local Platforms
+! 		// Check Remote Platforms
+! 		// Check if any asteroid is interacting with any bullet
+! 		// Check inputs
+! 		// If rotating, compute pivot and angle
+! 		// Player Movement
+! 		// Recording Input
+! 		// Restrain Player to window
+! 		// std::cout << isKeyPressed(SDL_SCANCODE_1) << std::endl;
+! 		SDL_FPoint pivot = {0, 0};
+! 		SDL_RenderTexture(renderer, tex, NULL, &rectangle);
+! 		SDL_RenderTextureRotated(
+! 		Vector vel = player.getComponent<Vector>("velocity");
+! 		asteroid_pool->update(d_time);
+! 		else justPressed1 = false;
+! 		eventManager.ProcessEvents(std::chrono::steady_clock::now().time_since_epoch().count());
+! 		float orientDeg = 0.0f;
+! 		for (auto object1 : objects) {
+! 		if (collidable(&player) && collidable(&deathZone_1)) {
+! 		if (collidable(&player) && collidable(&platform_1) && collidable(&platform_2) && collidable(&platform_3)) {				
+! 		if (isKeyPressed(SDL_SCANCODE_1)) {
+! 		if (isKeyPressed(SDL_SCANCODE_2)) {
+! 		if (isKeyPressed(SDL_SCANCODE_3)) {
+! 		if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
+! 		if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
+! 		if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
+! 		if (isKeyPressed(SDL_SCANCODE_W) || isKeyPressed(SDL_SCANCODE_SPACE)) {	// Jump
+! 		if (object->hasComponent("orientation")) {
+! 		input.update();
+! 		player.setComponent("velocity", Vector{0, 0});
+! 		player_bullet_pool->update(d_time);
+! 		recordingManager.startPlayback();
+! 		recordingManager.startRecording();
+! 		return;
+! 		updatePosition(player, isPaused);
+! 		{
+! 		}
+! 	//	Input
+! 	//	Recording Manager
+! 	// Binding Input
+! 	// Death Zone
+! 	// Register Recording events
+! 	// Setting Gravity
+! 	BACK,
+! 	FAR_LEFT
+! 	GameObject *go = objectPool->spawn();
+! 	GameObject deathZone_1 = GameObject();
+! 	GameObject player = GameObject();
+! 	GameObject player;
+! 	GameObject player_spawner = GameObject();
+! 	GameObject spawnZone_1 = GameObject();
+! 	GameObject spawnZone_2 = GameObject();
+! 	GameObjectPool *asteroid_pool = new GameObjectPool(sizeof(GameObject), 5, &player, Vector{100, 100});
+! 	GameObjectPool *objectPool = new GameObjectPool(sizeof(GameObject), 5);
+! 	InputManager input(eventManager);
+! 	LEFT,
+! 	RIGHT,
+! 	RecordingManager recordingManager(renderer, &eventManager, myID, &masterObjectList, &objectMutex, renderObj);
+! 	SDL_FRect rectangle = { pos.x - offset.x + 700, pos.y - offset.y  + 500, dim.x, dim.y};
+! 	SHOOT
+! 	Ship_Bullet_Pool *player_bullet_pool = new Ship_Bullet_Pool(sizeof(GameObject), 100, &player, &objects, &objectMutex);
+! 	TURN_RIGHT,
+! 	WorldPhysics::setGravity(gravity);
+! 	asteroid_texture_big = IMG_LoadTexture(renderer, "../media/Card_256.jpg");
+! 	asteroid_texture_med = IMG_LoadTexture(renderer, "../media/Card_128.jpg");
+! 	asteroid_texture_small = IMG_LoadTexture(renderer, "../media/Card_64.jpg");
+! 	deathZone_1.setComponent("dimensions", deathZone1_Dimensions);
+! 	deathZone_1.setComponent("object_id", -6);
+! 	deathZone_1.setComponent("position", deathZone1_Position);
+! 	eventManager.RegisterListener(StartPlaybackEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+! 	eventManager.RegisterListener(StartRecordingEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+! 	eventManager.RegisterListener(StopPlaybackEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+! 	go->setComponent("is_npc", true);
+! 	go->setComponent("position", Vector{700, 600});
+! 	input.bindChord({SDL_SCANCODE_A, SDL_SCANCODE_LSHIFT}, 4);
+! 	input.bindKey(SDL_SCANCODE_A, 1, InputManager::InputType::SingleComplex);
+! 	input.bindKey(SDL_SCANCODE_D, 3, InputManager::InputType::Simple);
+! 	input.bindKey(SDL_SCANCODE_S, 2, InputManager::InputType::Simple);
+! 	input.bindKey(SDL_SCANCODE_W, 0, InputManager::InputType::Simple);
+! 	localObjects.push_back(&deathZone_1);
+! 	localObjects.push_back(&platform_1);
+! 	localObjects.push_back(&platform_2);
+! 	localObjects.push_back(&platform_3);
+! 	localObjects.push_back(&player);
+! 	localObjects.push_back(&spawnZone_1);
+! 	localObjects.push_back(&spawnZone_2);
+! 	localObjects.push_back(go);
+! 	objects.push_back(&player);
+! 	objects.push_back(&player_spawner);
+! 	orb_dimensions = {orb_texture->w, orb_texture->h};
+! 	orb_texture = IMG_LoadTexture(renderer, "../media/darkworld_spawn_swirlingorb.png");
+! 	platform_Dimensions = {platform_Texture->w, platform_Texture->h};
+! 	player.setComponent("dimensions", player_Dimensions);
+! 	player.setComponent("dimensions", player_dimensions);
+! 	player.setComponent("is_local_player", true);
+! 	player.setComponent("is_player", true);
+! 	player.setComponent("orientation", 0.0f);
+! 	player.setComponent("starting_pos", player_Position);
+! 	player.setComponent("texture", player_Texture);
+! 	player.setComponent("texture", player_texture);
+! 	player.setComponent("velocity", Vector{0, 0});
+! 	player.setComponent("velocity", player_Velocity);
+! 	player_Dimensions = {player_Texture->w, player_Texture->h};
+! 	player_Texture = IMG_LoadTexture(renderer, "../media/darkworld_character_morwen_idle.png");
+! 	player_dimensions = {player_texture->w, player_texture->h};
+! 	player_spawner.setComponent("id", 1);
+! 	player_spawner.setComponent("position", spawnZone1_Position);
+! 	player_texture = IMG_LoadTexture(renderer, "../media/space_ship.png");
+! 	spawnZone_1.setComponent("object_id", -4);
+! 	spawnZone_1.setComponent("position", spawnZone1_Position);
+! 	spawnZone_2.setComponent("object_id", -5);
+! 	spawnZone_2.setComponent("position", spawnZone2_Position);
+! 	std::cout << "Setup" << std::endl;
+! 	std::cout << "Started multi threading" << myID << std::endl;
+! 	std::cout << "Started multi threading" << std::endl;
+! 	std::thread renderThread(&rendering, &objects, &objectMutex);
+! 	std::thread renderThread(&rendering, playingRecording, &objectList, &objectMutex, &player, &localObjects);
+! 	std::vector<GameObject *> localObjects;
+! 	std::vector<GameObject *> objects;
+! 	std::vector<std::vector<GameObject *> *> masterObjectList;
+! 	texCheck(asteroid_texture_big);
+! 	texCheck(asteroid_texture_med);
+! 	texCheck(asteroid_texture_small);
+! 	texCheck(orb_texture);
+! 	texCheck(player_Texture);
+! 	texCheck(player_texture);
+! 	});
+!                 renderObj(object, Vector{0, 0});
+!     DOWN,
+!     FORWARD,
+!     SDL_FRect rectangle = { pos.x - offset.x, pos.y - offset.y, dim.x, dim.y};
+!     TURN_LEFT,
+!     UP,
+!     player.setComponent("id", 0);
+!     std::vector<GameObject *> objectList;
+! // Asteroids
+! // Orb
+! // Platforms
+! SDL_Texture* asteroid_texture_big;
+! SDL_Texture* asteroid_texture_med;
+! SDL_Texture* asteroid_texture_small;
+! SDL_Texture* orb_texture;
+! SDL_Texture* platform_Texture;
+! SDL_Texture* player_Texture;
+! SDL_Texture* player_texture;
+! Vector orb_dimensions;
+! Vector platform1_Position = {100, 400};
+! Vector platform2_Position = {400, 400};
+! Vector platform3_Position = {700, 400};
+! Vector platform_Dimensions;;
+! Vector player_Dimensions;
+! Vector player_Position = {100, 100};
+! Vector player_Position = {400, 400};
+! Vector player_dimensions;
+! Vector windowSize = {720, 540};
+! Vector windowSize = {800, 800};
+! int asteroid_speed = 20;
+! void rendering(bool *playingRecording, std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *player, std::vector<GameObject *> *localObjectList) {
+! void rendering(std::vector<GameObject *> *objectList, std::mutex *objectMutex) {
+*** 108,130 ****
+*** 13,18 ****
+*** 133,144 ****
+*** 162,167 ****
+*** 171,180 ****
+*** 182,249 ****
+*** 25,31 ****
+*** 267,346 ****
+*** 33,78 ****
+*** 349,362 ****
+*** 364,500 ****
+*** 502,514 ****
+*** 520,625 ****
+*** 627,635 ****
+*** 637,717 ****
+*** 719,771 ****
+*** 775,790 ****
+*** 85,95 ****
+*** main.cpp	2025-12-02 12:31:45.930764762 -0500
+***************
++ 
++ 		
++ 			spawnAsteroid(asteroid_pool, &objects, &objectMutex);
++ 			time_since_spawn = timeline.getElapsedTicks();
++ 		// AI USE DISCLOSURE, Gave ChatGPT a partially working render texture set of code, and asked
++ 		// Lock
++ 		// TODO, add logic to spawn asteroid on edge of screen going
++ 		// TODO: Account for orientation overflow
++ 		// it to add rotational locking knowing that some objects have a orientation component
++ 		GameObject* gameObject = asteroidPool->spawn(Vector{400, 400}, Vector{0, 0});
++ 		GameObject* gameObject = bulletPool->spawn();
++ 		Vector playerOrient{ cos(playerRad - M_PI/2), sin(playerRad - M_PI/2) };
++ 		Vector playerPos = player.getComponent<Vector>("position");
++ 		float playerRad = player.getComponent<float>("orientation");
++ 		gameObject->setComponent("dimensions", Vector {asteroid_texture_small->w, asteroid_texture_small->h});
++ 		gameObject->setComponent("dimensions", orb_dimensions);
++ 		gameObject->setComponent("isAsteroid", true);
++ 		gameObject->setComponent("position", Vector{rand() % (int)windowSize.x, rand() % (int)windowSize.y});
++ 		gameObject->setComponent("texture", asteroid_texture_small);
++ 		gameObject->setComponent("texture", orb_texture);
++ 		gameObject->setComponent("velocity", Vector{rand() % asteroid_speed, rand() % asteroid_speed});
++ 		if (asteroid_pool->getActiveCount() < asteroid_pool->getCapacity() && timeline.getElapsedTicks() - time_since_spawn > 20) {
++ 		objectList->push_back(gameObject);
++ 		std::lock_guard<std::mutex> lock(*objectMutex);
++ 		}
++ 	long time_since_spawn = 0;
++ 	return Vector{cos(orientation), sin(orientation)};
++ 	{
++ 	}
++     // Adjust Starting Pos
++     player_Position = Vector{(windowSize.x / 2) - (player_dimensions.x / 2), (windowSize.y / 2) - (player_dimensions.y / 2)};
++     spawnZone1_Position = player_Position;
++ #include "../engine/headers/ship_bullet_pool.h"
++ Vector orientToVector(float orientation) {
++ float playerAcceleration = .5;
++ float player_turnSpeed = 5;
++ void renderObj(GameObject *object, Vector offset) {
++ void spawnAsteroid(GameObjectPool* asteroidPool, std::vector<GameObject *> *objectList, std::mutex *objectMutex) {
++ void spawnBullet(Ship_Bullet_Pool* bulletPool, std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject* player) {
++ }
+- 
+- 	
+- 		
+- 					// Resize as if the screen was still the same
+- 					SDL_SetRenderLogicalPresentation(renderer, 1920, 1080, SDL_LOGICAL_PRESENTATION_STRETCH);
+- 					renderObj(object, offset);
+- 				// Constant Scaling
+- 				// Get Player Position for offsetting others
+- 				// Proportional Scaling
+- 				// Render Each Object
+- 				Vector offset = player->getComponent<Vector>("position");
+- 				else {
+- 				for (const auto &object : *localObjectList) {
+- 				if (constantSizeScale) {
+- 				std::cout << "findGameObject Failed" << std::endl;
+- 				}
+- 			// Lock, remote objects
+- 			// Set downward velocity to 0
+- 			Vector pos = localPlayer->getComponent<Vector>("position");
+- 			auto deathEvent = std::make_shared<DeathEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), collision.objectA_ID);
+- 			auto spawnEvent = std::make_shared<SpawnEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), death.entityID, spawnZone1_Position.x, spawnZone1_Position.y);
+- 			auto spawnEvent = std::make_shared<SpawnEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), death.entityID, spawnZone2_Position.x, spawnZone2_Position.y);
+- 			else {
+- 			eventManager.QueueEvent(deathEvent);
+- 			myPlayerState.clientId = localPlayer->getComponent<int>("client_id");
+- 			myPlayerState.x = pos.x;
+- 			myPlayerState.y = pos.y; 
+- 			player.setComponent("velocity", Vector{player.getComponent<Vector>("velocity").x, -WorldPhysics::getGravity() * timeline.getDeltaTime()});
+- 			}
+- 		// // Render Local Player
+- 		// Add Gravity
+- 		// Create Spawn point for the player
+- 		// Get correct Object List
+- 		// Player collides with Death Zone
+- 		// Player collides with platform
+- 		// Wait
+- 		// std::cout << "Refresh, end of loop" << std::endl;
+- 		// std::cout << eventList.size() << std::endl;
+- 		// {
+- 		PlayerState myPlayerState;
+- 		Vector playerSpeed = player.getComponent<Vector>("velocity");
+- 		const auto &collision = static_cast<const CollisionEvent &>(e);
+- 		const auto &death = static_cast<const DeathEvent &> (e);
+- 		const auto &spawn = static_cast<const SpawnEvent &>(e);
+- 		else justPressed3 = false;
+- 		else {
+- 		eventManager.ProcessEvents(std::chrono::steady_clock::now().time_since_epoch().count());
+- 		exit(1);
+- 		if (!*playingRecording) {
+- 		if (collision.objectB_ID == -1 || collision.objectB_ID == -2 || collision.objectB_ID == -3 || collision.objectB_ID == 1 || collision.objectB_ID == 2) {
+- 		if (collision.objectB_ID == -6) {
+- 		if (death.entityID % 2 == 0) {
+- 		if (input.playerID == player.getComponent<int>("client_id")) {
+- 		myNetwork->sendPlayerState(myPlayerState);
+- 		myNetwork->update();
+- 		object->setComponent("dimensions", platform_Dimensions);
+- 		object->setComponent("dimensions", player_Dimensions);
+- 		object->setComponent("texture", platform_Texture);
+- 		object->setComponent("texture", player_Texture);
+- 		player.setComponent("position", Vector(spawn.x, spawn.y));
+- 		player.setComponent("velocity", Vector {playerSpeed.x, playerSpeed.y + WorldPhysics::getGravity() * d_time});
+- 		recordingManager.stopRecording();
+- 		renderObj(go, Vector{0, 0});
+- 		std::cerr << "Client Failed to be created" << std::endl;
+- 		std::this_thread::sleep_for(std::chrono::milliseconds(33));
+- 		{
+- 		}
+- 	// (!object->hasComponent("color") && !object->hasComponent("texture"))
+- 	// Clear screen
+- 	// Collision Event
+- 	// Death Event
+- 	// Logic for adding dimensions and textures to npcs
+- 	// Logic for adding dimensions and textures to remove players
+- 	// Loop Forever
+- 	// Network Setup
+- 	// Platforms
+- 	// SDL_RenderClear(renderer);
+- 	// Scaling Type bool
+- 	// Spawn Event
+- 	// Start Networking Thread
+- 	// Start the client
+- 	// refreshScreen(renderer);
+- 	////////////////////
+- 	GameObject platform_1 = GameObject();
+- 	GameObject platform_2 = GameObject();
+- 	GameObject platform_3 = GameObject();
+- 	NetworkEvent networkEvents[32];
+- 	NetworkManager myNetwork;
+- 	bool *playingRecording = new bool(false);
+- 	bool constantSizeScale = true;
+- 	bool justPressed1 = false;
+- 	bool justPressed3 = false;
+- 	const int HANDSHAKE_PORT = 5557;
+- 	const int REQUEST_BASE_PORT = 5600;
+- 	const int SUBSCRIBE_PORT = 5556;
+- 	eventManager.RegisterListener(CollisionEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+- 	eventManager.RegisterListener(DeathEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+- 	eventManager.RegisterListener(SpawnEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+- 	eventManager.RegisterListener(StopRecordingEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
+- 	if (myID == -1) {
+- 	if (object->hasComponent("is_npc") && (!object->hasComponent("dimensions") || !object->hasComponent("texture"))) {
+- 	if (object->hasComponent("is_player") && (!object->hasComponent("dimensions") || !object->hasComponent("texture"))) {
+- 	int REPLY_PORT;
+- 	int myID = myNetwork.connectAndHandshake("localhost", HANDSHAKE_PORT, REPLY_PORT);
+- 	int numNetworkEvents = 0;
+- 	masterObjectList.push_back(&localObjects);
+- 	masterObjectList.push_back(&objectList);
+- 	myNetwork.startClient("localhost", REPLY_PORT, SUBSCRIBE_PORT, objectList, objectMutex, eventList, eventMutex);
+- 	platform_1.setComponent("dimensions", platform_Dimensions);
+- 	platform_1.setComponent("npc_id", -1);
+- 	platform_1.setComponent("position", platform1_Position);
+- 	platform_1.setComponent("texture", platform_Texture);
+- 	platform_2.setComponent("dimensions", platform_Dimensions);
+- 	platform_2.setComponent("npc_id", -2);
+- 	platform_2.setComponent("position", platform2_Position);
+- 	platform_2.setComponent("texture", platform_Texture);
+- 	platform_3.setComponent("dimensions", platform_Dimensions);
+- 	platform_3.setComponent("npc_id", -3);
+- 	platform_3.setComponent("position", platform3_Position);
+- 	platform_3.setComponent("texture", platform_Texture);
+- 	platform_Texture = IMG_LoadTexture(renderer, "../media/darkworld_platform_brick_idle.png");
+- 	player.setComponent("client_id", myID);
+- 	std::cout << "Events" << std::endl;
+- 	std::cout << "Network Up" << std::endl;
+- 	std::cout << "Setup" << std::endl;
+- 	std::thread netThread(&networking, &myNetwork, &objectList, &objectMutex, &player, networkEvents, &numNetworkEvents, &networkEventMutex);
+- 	texCheck(platform_Texture);
+- 	while (true) {
+- 	}
+- 	});
+-         	eventManager.QueueEvent(spawnEvent);
+-             
+-                 myPlayerState.events[i] = localEvents[i];
+-             (*numEvents) = 0;
+-             for(int i = 0; i < myPlayerState.num_events; i++) {
+-             myPlayerState.num_events = (*numEvents);
+-             std::lock_guard<std::mutex> lock(*eventMutex);
+-             }
+-         //     eventList.clear();
+-         //     std::lock_guard<std::mutex> lock(eventMutex);
+-         // }
+-         }
+-     std::mutex networkEventMutex;
+- // DeathZones
+- // Game Vars
+- // Multiplayer Data
+- // Network Thread
+- NetworkManager myNetwork;
+- SDL_Texture* playerTex;
+- Vector deathZone1_Dimensions = {700, 100};
+- Vector deathZone1_Position = {100, 900};
+- Vector remoteMovPlat_Pos;
+- Vector spawnZone2_Position = {700, 100};
+- float playerJumpSpeed = 300.0;
+- float playerSpeed = 300.0;
+- int gravity = 200;
+- std::map<int, std::unique_ptr<GameObject>> remoteNPCs;
+- std::map<int, std::unique_ptr<GameObject>> remotePlayers;
+- std::mutex npcMutex;
+- std::mutex playersMutex;
+- std::thread myNetworkThread;
+- void networking(NetworkManager *myNetwork, std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject *localPlayer, NetworkEvent* localEvents, int *numEvents, std::mutex* eventMutex) {
+- void renderObj(GameObject *object, Vector offset) {
+- }
+--- 106,141 ----
+--- 13,19 ----
+--- 159,198 ----
+--- 202,210 ----
+--- 212,226 ----
+--- 244,295 ----
+--- 26,32 ----
+--- 298,305 ----
+--- 307,365 ----
+--- 34,64 ----
+--- 367,376 ----
+--- 382,426 ----
+--- 428,441 ----
+--- 443,463 ----
+--- 465,520 ----
+--- 524,530 ----
+--- 71,81 ----
+--- 94,103 ----
+--- asteroids.cpp	2025-12-09 14:14:24.319279810 -0500

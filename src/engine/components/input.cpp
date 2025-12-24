@@ -2,10 +2,11 @@
 #include "../headers/EventManager.h"  
 #include <iostream>
 
-InputManager::InputManager(EventManager& evtManager)
+InputManager::InputManager(EventManager& evtManager, int playerID)
     : eventManager(evtManager), 
       numKeys(0),
-      currentTime_ms(0)
+      currentTime_ms(0),
+      playerID(playerID)
 {
     keyboardState = SDL_GetKeyboardState(&numKeys);
     if (numKeys > 0) {
@@ -177,7 +178,7 @@ void InputManager::processChords()
             }
 
             if (!alreadyConsumed) {
-                auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), binding.actionId, 0);
+                auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), binding.actionId, playerID);
                 eventManager.QueueEvent(inputEvent);
                 // Consume and reset all keys in this particular chord
                 for (auto key : binding.keys) {
@@ -202,7 +203,7 @@ void InputManager::processKeys()
         if (binding.type == InputType::Simple) {
             // Simple Key Logic
             if (isDown(key)) {
-                auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), binding.actionId, 0);
+                auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), binding.actionId, playerID);
                 eventManager.QueueEvent(inputEvent);
             }
         } 
@@ -229,7 +230,7 @@ void InputManager::processKeys()
             //     eventManager.QueueEvent(inputEvent);
             // }
             if (fire) {
-                auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), binding.actionId, 0);
+                auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), binding.actionId, playerID);
                 eventManager.QueueEvent(inputEvent);
             }
             

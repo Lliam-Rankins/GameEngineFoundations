@@ -1,12 +1,14 @@
 #include "../headers/ship_bullet_pool.h"
 
-Ship_Bullet_Pool::Ship_Bullet_Pool(int slotSize, int numSlots, GameObject *player)
+Ship_Bullet_Pool::Ship_Bullet_Pool(int slotSize, int numSlots, GameObject *player, std::vector<GameObject *> *objects, std::mutex *objectMutex)
     : alloc(slotSize, numSlots), activeCount(0), capacity(numSlots) {
     // Dynamically allocate the array for tracking active IDs
     activeIDs = new int[numSlots];
     componentsArray = new std::map<std::string, Component>[numSlots];
     this->startPos = startPos;
     this->player = player;
+    this->objects = objects;
+    this->objectMutex = objectMutex;
 }
 
 Ship_Bullet_Pool::~Ship_Bullet_Pool() {
@@ -43,11 +45,15 @@ GameObject* Ship_Bullet_Pool::spawn() {
     GameObject* gameObject = new (mem) GameObject(&componentsArray[id]);
 
     float orientation = player->getComponent<float>("orientation");
-    Vector vel{bulletSpeed * cos(orientation), bulletSpeed * sin(orientation)};
+    Vector vel{bulletSpeed * cos(orientation - M_PI/2), bulletSpeed * sin(orientation - M_PI/2)};
+
+    Vector playerSpeed = player->getComponent<Vector>("velocity");
 
     gameObject->setComponent("position", player->getComponent<Vector>("position"));
-    gameObject->setComponent("velocity", vel);
-    
+    gameObject->setComponent("velocity", Vector{vel.x,vel.y});
+
+    std::cout << "Player: " << playerSpeed.x << " |  Bullet: " << vel.x << " |  Total: " <<  gameObject->getComponent<Vector>("velocity").x << std::endl;
+
     // Add the new bullet's ID to the active list
     activeIDs[activeCount++] = id;
 
@@ -67,12 +73,9 @@ void Ship_Bullet_Pool::update(float dt) {
         Vector newPos = {currPos.x + (currVel.x * dt), currPos.y + (currVel.y * dt)};
 
         bullet->setComponent("position", newPos);
-
-        // Colliding with player
-        if (overlappingColliders1(*bullet, *player)) {
-            player->setComponent("position", player->getComponent<Vector>("starting_pos"));
-        }
-
+        bullet->setComponent("isBullet", true);
+        
+       
 
         // If bullet is no longer active, clean it up
         if (newPos.x < 0) {

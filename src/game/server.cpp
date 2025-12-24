@@ -13,11 +13,11 @@ Vector movingPlatformHorizontal_StartPosition = {500, 600};
 Vector movingPlatformVertical_StartPosition = {1200, 300};
 
 enum Direction {
+    WIND,
     UP,
     DOWN,
     LEFT,
-    RIGHT,
-    FAR_LEFT
+    RIGHT
 };
 
 float movingPlatformSpeed = 50;
@@ -94,7 +94,7 @@ int main(int argc, char* argv[]) {
                     if (overlappingColliders1(*obj, movingPlatformHorizontal)) {
                         // Apply "Wind" on moving platform
                         GameState gamestate = serverManager.getGameState();
-                        gamestate.eventList.push_back(NetworkEvent {2, FAR_LEFT, obj->getComponent<int>("client_id"), -1, -1, -1, 0});
+                        gamestate.eventList.push_back(NetworkEvent {2, WIND, obj->getComponent<int>("client_id"), -1, -1, -1, 0});
                         serverManager.setGameState(gamestate);
                     }
                 }   

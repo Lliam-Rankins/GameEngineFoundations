@@ -1,0 +1,304 @@
+  
+  		
+  				
+  				break;
+  				break; 
+  			time_since_spawn = timeline.getElapsedTicks();
+  		//
+  		// Collisions
+  		// Gameplay Updates
+  		// Lock
+  		// Move player and then reset their velocity
+  		// Player Movement
+  		//////////////////////////////////////////////////
+  		//////////////////////////////////////////////////		
+  		SDL_Texture* tex = object->getComponent<SDL_Texture *>("texture");
+  		Vector playerPos = player.getComponent<Vector>("position");
+  		Vector playerVel = player.getComponent<Vector>("velocity");
+  		gameObject->setComponent("texture", orb_texture);
+  		objectList->push_back(gameObject);
+  		std::lock_guard<std::mutex> lock(*objectMutex);
+  		switch (input.action) {
+  		}
+  	// Create Dimensions
+  	// Instantiate ObjectList
+  	// Object has Color
+  	// Object has Texture
+  	// Only Render Objects with Positions and Dimensions, and a color or texture
+  	// Spawn Zones
+  	// Time Line Setup
+  	////////////////////
+  	//Load Textures
+  	//`Event Setup
+  	//`Pool Setup
+  	GameObject player = GameObject();
+  	GameObject player_spawner = GameObject();
+  	else if (object->hasComponent("color")) {
+  	if (!object->hasComponent("position") || !object->hasComponent("dimensions")) {
+  	if (object->hasComponent("texture")) {
+  	objects.push_back(&player);
+  	objects.push_back(&player_spawner);
+  	orb_dimensions = {orb_texture->w, orb_texture->h};
+  	orb_texture = IMG_LoadTexture(renderer, "../media/darkworld_spawn_swirlingorb.png");
+  	player.setComponent("dimensions", player_dimensions);
+  	player.setComponent("physics", true);
+  	player.setComponent("position", player_Position);
+  	player.setComponent("starting_pos", player_Position);
+  	player.setComponent("texture", player_texture);
+  	player.setComponent("velocity", Vector{0, 0});
+  	player_dimensions = {player_texture->w, player_texture->h};
+  	player_spawner.setComponent("id", 1);
+  	player_spawner.setComponent("position", spawnZone1_Position);
+  	return false;
+  	texCheck(orb_texture);
+  	texCheck(player_texture);
+  	{
+  	}
+  	});
+      // Adjust Starting Pos
+      player.setComponent("id", 0);
+      spawnZone1_Position = player_Position;
+  #include "../engine/headers/EventManager.h"
+  #include "../engine/headers/GameObjectPool.h"
+  #include "../engine/headers/recording.h"
+  #include <chrono>
+  #include <iostream>
+  #include <thread>
+  // Input Enum
+  // Orb
+  // Player
+  // Spawn Zones
+  // Texture valid check
+  ///////////////////////////
+  SDL_Texture* orb_texture;
+  SDL_Texture* player_texture;
+  Vector orb_dimensions;
+  Vector player_Velocity = {0, 0};
+  Vector player_dimensions;
+  Vector spawnZone1_Position = {100, 100};
+  enum Direction {
+  void renderObj(GameObject *object, Vector offset) {
+  }
+  };
+! 
+! 		
+! 					
+! 							
+! 								
+! 								object1->setComponent("position", Vector{rand() % (int)windowSize.x, rand() % (int)windowSize.y});
+! 								object1->setComponent("velocity", Vector{rand() % asteroid_speed, rand() % asteroid_speed});
+! 								std::lock_guard<std::mutex> lock(objectMutex);
+! 							// change position and velocity randomly
+! 							{
+! 							}
+! 						// Object 2 is asteroid, check if overlapping
+! 						if (overlappingColliders1(*object1, *object2)) {
+! 						}
+! 					Vector pos = object1->getComponent<Vector>("position");
+! 					if (object2->hasComponent("isBullet")) {
+! 					if (pos.x < 0) pos.x = windowSize.x;
+! 					if (pos.x > windowSize.x) pos.x = 0;
+! 					if (pos.y < 0) pos.y = windowSize.y;
+! 					if (pos.y > windowSize.y) pos.y = 0;
+! 					object1->setComponent("position", pos);
+! 					std::lock_guard<std::mutex> lock(objectMutex);
+! 					}
+! 				// Object 1 is bullet
+! 				for (auto object2 : objects) {
+! 				player.setComponent("orientation", playerRad + player_turnSpeed * timeline.getDeltaTime());
+! 				player.setComponent("orientation", playerRad - player_turnSpeed * timeline.getDeltaTime());
+! 				player.setComponent("position", vectorAdd(playerPos, Vector{-player_tp_distance, 0}));
+! 				player.setComponent("velocity", Vector{-playerSpeed * timeline.getDeltaTime(), playerVel.y});
+! 				player.setComponent("velocity", Vector{playerSpeed * timeline.getDeltaTime(), playerVel.y});
+! 				player.setComponent("velocity", Vector{playerVel.x, -playerSpeed * timeline.getDeltaTime()});
+! 				player.setComponent("velocity", Vector{playerVel.x, playerSpeed * timeline.getDeltaTime()});
+! 				player.setComponent("velocity", vectorAdd(playerVel, Vector{playerOrient.x * playerAcceleration, playerOrient.y * playerAcceleration}));
+! 				player.setComponent("velocity", vectorSub(playerVel, Vector{playerOrient.x * playerAcceleration, playerOrient.y * playerAcceleration}));
+! 				spawnBullet(player_bullet_pool, &objects, &objectMutex, &player);
+! 				{
+! 				}
+! 			&pivot,          // center of rotation inside the texture
+! 			&rectangle,      // dst in world coordinates
+! 			NULL,            // src = whole texture (IMPORTANT)
+! 			SDL_FLIP_NONE
+! 			Vector pos = player.getComponent<Vector>("position");
+! 			Vector vel = player.getComponent<Vector>("velocity");
+! 			case BACK:
+! 			case DOWN:
+! 			case FORWARD:
+! 			case LEFT:
+! 			case LEFT_TP:
+! 			case RIGHT:
+! 			case SHOOT:
+! 			case TURN_LEFT:
+! 			case TURN_RIGHT:
+! 			case UP:
+! 			float radians = object->getComponent<float>("orientation");
+! 			if (object1->hasComponent("isAsteroid")) {
+! 			if (pos.x < 0) pos.x = windowSize.x;
+! 			if (pos.x > windowSize.x) pos.x = 0;
+! 			if (pos.y < 0) pos.y = windowSize.y;
+! 			if (pos.y > windowSize.y) pos.y = 0;
+! 			orientDeg = radians * (180.0f / M_PI);
+! 			orientDeg,
+! 			pivot = { dim.x / 2.0f, dim.y / 2.0f };  // rotate around center
+! 			player.setComponent("position", Vector{pos.x + (vel.x * timeline.getDeltaTime()), pos.y + (vel.y * timeline.getDeltaTime())});
+! 			player.setComponent("position", pos);
+! 			renderer,
+! 			running = false;
+! 			spawnAsteroid(asteroid_pool, &objects, &objectMutex);
+! 			spawnBullet(objectPool, &objects, &objectMutex);
+! 			std::lock_guard<std::mutex> lock(objectMutex);
+! 			tex,
+! 			}
+! 		);
+! 		// 	// Move Down
+! 		// 	// Move Left
+! 		// 	// Move Right
+! 		// AI USE END
+! 		// Check if any asteroid is interacting with any bullet
+! 		// If rotating, compute pivot and angle
+! 		// Lock
+! 		// Player Movement
+! 		// Restrain Player to window
+! 		// TODO, add logic to spawn asteroid on edge of screen going
+! 		// Vector vel = player.getComponent<Vector>("velocity");
+! 		// if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
+! 		// if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
+! 		// if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
+! 		// if (isKeyPressed(SDL_SCANCODE_W)) {	// Jump
+! 		// }
+! 		GameObject * gameObject = objectPool->spawn(Vector{door_position.x + door_dimensions.x / 2, door_position.y + door_dimensions.y / 2}, vel);
+! 		GameObject* gameObject = asteroidPool->spawn(Vector{400, 400}, Vector{0, 0});
+! 		GameObject* gameObject = bulletPool->spawn();
+! 		SDL_FPoint pivot = {0, 0};
+! 		SDL_RenderTexture(renderer, tex, NULL, &rectangle);
+! 		SDL_RenderTextureRotated(
+! 		Vector vel = Vector {-(float)rand() / RAND_MAX, 2 * ((float)rand() / RAND_MAX) - 1};
+! 		asteroid_pool->update(d_time);
+! 		float orientDeg = 0.0f;
+! 		for (auto object1 : objects) {
+! 		gameObject->setComponent("dimensions", Vector {asteroid_texture_small->w, asteroid_texture_small->h});
+! 		gameObject->setComponent("dimensions", Vector{orb_dimensions});
+! 		gameObject->setComponent("dimensions", orb_dimensions);
+! 		gameObject->setComponent("isAsteroid", true);
+! 		gameObject->setComponent("position", Vector{rand() % (int)windowSize.x, rand() % (int)windowSize.y});
+! 		gameObject->setComponent("texture", asteroid_texture_small);
+! 		gameObject->setComponent("velocity", Vector{rand() % asteroid_speed, rand() % asteroid_speed});
+! 		if (asteroid_pool->getActiveCount() < asteroid_pool->getCapacity() && timeline.getElapsedTicks() - time_since_spawn > 20) {
+! 		if (object->hasComponent("orientation")) {
+! 		if (objectPool->getActiveCount() < objectPool->getCapacity() && timeline.getElapsedTicks() - time_since_spawn > 5) {
+! 		if (overlappingColliders1(player, bullet_spawner)) {
+! 		objectList->push_back(gameObject);
+! 		objectPool->update(d_time);
+! 		player.setComponent("velocity", Vector{0, 0});
+! 		player_bullet_pool->update(d_time);
+! 		return;
+! 		std::lock_guard<std::mutex> lock(*objectMutex);
+! 		updatePosition(player, isPaused);
+! 		vel.x = vel.x * 300;
+! 		vel.y = vel.y * 300;
+! 		{
+! 		}
+! 	BACK,
+! 	DOWN,
+! 	GameObjectPool *asteroid_pool = new GameObjectPool(sizeof(GameObject), 5, &player, Vector{100, 100});
+! 	GameObjectPool *objectPool = new GameObjectPool(sizeof(GameObject), 100, &player, door_position);
+! 	LEFT_TP
+! 	RIGHT,
+! 	SHOOT
+! 	Ship_Bullet_Pool *player_bullet_pool = new Ship_Bullet_Pool(sizeof(GameObject), 100, &player, &objects, &objectMutex);
+! 	TURN_RIGHT,
+! 	player_texture = IMG_LoadTexture(renderer, "../media/darkworld_enemy_skullduggery_idle.png");
+! 	player_texture = IMG_LoadTexture(renderer, "../media/space_ship.png");
+! 	return Vector{cos(orientation), sin(orientation)};
+! 	{
+! 	}
+!         //     // Move Up
+!         //     vel = vectorAdd(vel, Vector{-playerSpeed * d_time, 0});
+!         //     vel = vectorAdd(vel, Vector{0, -playerSpeed * d_time});
+!         //     vel = vectorAdd(vel, Vector{0, playerSpeed * d_time});
+!         //     vel = vectorAdd(vel, Vector{playerSpeed * d_time, 0});
+!         // player.setComponent("velocity", vel);
+!     FORWARD,
+!     LEFT,
+!     TURN_LEFT,
+!     UP,
+!     door_position = Vector{windowSize.x - door_dimensions.x, (windowSize.y / 2) - (door_dimensions.y / 2)};
+!     player_Position = Vector{(windowSize.x / 2) - (player_dimensions.x / 2), (windowSize.y / 2) - (player_dimensions.y / 2)};
+!     player_Position = Vector{0, (windowSize.y / 2) - (player_dimensions.y / 2)};
+! // Door
+! SDL_Texture* door_texture;
+! Vector door_dimensions;
+! Vector door_position = {700, 350};
+! Vector orientToVector(float orientation) {
+! Vector player_Position = {400, 400};
+! Vector player_Position = {800, 800};
+! float playerAcceleration = .5;
+! float playerSpeed = 300.0;
+! float player_turnSpeed = 5;
+! int player_tp_distance = 200;
+! void spawnAsteroid(GameObjectPool* asteroidPool, std::vector<GameObject *> *objectList, std::mutex *objectMutex) {
+! void spawnBullet(GameObjectPool* objectPool, std::vector<GameObject *> *objectList, std::mutex *objectMutex) {
+! void spawnBullet(Ship_Bullet_Pool* bulletPool, std::vector<GameObject *> *objectList, std::mutex *objectMutex, GameObject* player) {
+! }
+*** 107,114 ****
+*** 13,18 ****
+*** 132,149 ****
+*** 200,225 ****
+*** 230,255 ****
+*** 259,265 ****
+*** 275,300 ****
+*** 33,57 ****
+*** 384,396 ****
+*** 398,423 ****
+*** 425,439 ****
+*** 70,80 ****
+*** 93,98 ****
+*** projectileHeck.cpp	2025-12-02 12:33:34.048665472 -0500
+***************
++ 
++ 		// AI USE DISCLOSURE, Gave ChatGPT a partially working render texture set of code, and asked
++ 		// TODO: Account for orientation overflow
++ 		// it to add rotational locking knowing that some objects have a orientation component
++ 		Vector playerOrient{ cos(playerRad - M_PI/2), sin(playerRad - M_PI/2) };
++ 		float playerRad = player.getComponent<float>("orientation");
++ 	asteroid_texture_big = IMG_LoadTexture(renderer, "../media/Card_256.jpg");
++ 	asteroid_texture_med = IMG_LoadTexture(renderer, "../media/Card_128.jpg");
++ 	asteroid_texture_small = IMG_LoadTexture(renderer, "../media/Card_64.jpg");
++ 	player.setComponent("orientation", 0.0f);
++ 	texCheck(asteroid_texture_big);
++ 	texCheck(asteroid_texture_med);
++ 	texCheck(asteroid_texture_small);
++ #include "../engine/headers/ship_bullet_pool.h"
++ // Asteroids
++ SDL_Texture* asteroid_texture_big;
++ SDL_Texture* asteroid_texture_med;
++ SDL_Texture* asteroid_texture_small;
++ int asteroid_speed = 20;
+- 
+- 	// Platforms
+- 	GameObject bullet_spawner = GameObject();
+- 	bullet_spawner.setComponent("dimensions", door_dimensions);
+- 	bullet_spawner.setComponent("id", -1);
+- 	bullet_spawner.setComponent("position", door_position);
+- 	bullet_spawner.setComponent("texture", door_texture);
+- 	objects.push_back(&bullet_spawner);
+- 	texCheck(door_texture);
+-     door_dimensions = {door_texture->w, door_texture->h};
+-     door_texture = IMG_LoadTexture(renderer, "../media/darkworld_spawn_doorwaytolimbo.png");
+- Vector spawnZone2_Position = {700, 100};
+--- 110,141 ----
+--- 13,19 ----
+--- 159,193 ----
+--- 244,271 ----
+--- 276,294 ----
+--- 298,305 ----
+--- 315,344 ----
+--- 34,58 ----
+--- 428,441 ----
+--- 443,462 ----
+--- 464,520 ----
+--- 71,81 ----
+--- 94,101 ----
+--- asteroids.cpp	2025-12-09 14:14:24.319279810 -0500

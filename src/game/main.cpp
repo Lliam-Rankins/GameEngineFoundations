@@ -85,11 +85,14 @@ SDL_Texture* playerTex;
 
 // Input Enum
 enum Direction {
+	WIND,
     UP,
     DOWN,
 	LEFT,
 	RIGHT,
-	FAR_LEFT
+	START_RECORDING,
+	STOP_RECORDING,
+	PLAYBACK
 };
 
 // Texture valid check
@@ -345,19 +348,6 @@ int main(int argc, char* argv[])
 	// Time Line Setup
 	Timeline timeline;
 
-
-	////////////////////
-	//`Pool Setup
-	////////////////////
-	GameObjectPool *objectPool = new GameObjectPool(sizeof(GameObject), 5);
-	GameObject *go = objectPool->spawn();
-	go->setComponent("is_npc", true);
-	go->setComponent("position", Vector{700, 600});
-
-	localObjects.push_back(go);
-	
-
-
 	////////////////////
 	//`Event Setup
 	////////////////////
@@ -416,10 +406,16 @@ int main(int argc, char* argv[])
 	eventManager.RegisterListener(InputEvent::STATIC_EVENT_TYPE_ID, [&](const Event &e) {
 		const auto &input = static_cast<const InputEvent &>(e);
 
+		std::cout << input.playerID << std::endl;
+		 
 		if (input.playerID == player.getComponent<int>("client_id")) {
 			Vector playerVel = player.getComponent<Vector>("velocity");
 
 			switch (input.action) {
+				case WIND:
+					player.setComponent("velocity", Vector{-playerSpeed * 30 * timeline.getDeltaTime(), playerVel.y});
+					break;
+
 				case UP:
 					player.setComponent("velocity", Vector{playerVel.x, -playerJumpSpeed * timeline.getDeltaTime()});
 					break; 
@@ -435,18 +431,31 @@ int main(int argc, char* argv[])
 				case RIGHT:
 					player.setComponent("velocity", Vector{playerSpeed * timeline.getDeltaTime(), playerVel.y});
 					break;
-					
-				case FAR_LEFT:
-					player.setComponent("velocity", Vector{-playerSpeed * 30 * timeline.getDeltaTime(), playerVel.y});
+				
+				case START_RECORDING:
+					{
+					auto startRecordEvent = std::make_shared<StartRecordingEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+					eventManager.QueueEvent(startRecordEvent);
+					}
 					break;
+
+				case STOP_RECORDING:
+					{
+					auto stopRecordEvent = std::make_shared<StopRecordingEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+					eventManager.QueueEvent(stopRecordEvent);
+					}
+					break;
+
+				case PLAYBACK:
+					auto startPlaybackEvent = std::make_shared<StartPlaybackEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
+					eventManager.QueueEvent(startPlaybackEvent);
+					break;
+
 			}
 		}
 	});
 
 	std::cout << "Events" << std::endl;
-
-
-
 
 	////////////////////
 	// Network Setup
@@ -469,7 +478,25 @@ int main(int argc, char* argv[])
 
 	myNetwork.startClient("localhost", REPLY_PORT, SUBSCRIBE_PORT, objectList, objectMutex, eventList, eventMutex);
 
-	std::cout << "Network Up" << std::endl;
+	std::cout << "Network Up, Client ID: " << myID << std::endl;
+
+
+	////////////////////
+	//	Input Manager
+	////////////////////
+	InputManager input(eventManager, myID);
+
+	input.bindKey(SDL_SCANCODE_SPACE, UP, InputManager::InputType::Simple);
+	input.bindKey(SDL_SCANCODE_W, UP, InputManager::InputType::Simple);
+	input.bindKey(SDL_SCANCODE_A, LEFT, InputManager::InputType::Simple);
+	input.bindKey(SDL_SCANCODE_S, DOWN, InputManager::InputType::SingleComplex);
+	input.bindKey(SDL_SCANCODE_D, RIGHT, InputManager::InputType::Simple);
+
+
+	input.bindChord({SDL_SCANCODE_LCTRL, SDL_SCANCODE_R}, START_RECORDING);
+	input.bindChord({SDL_SCANCODE_LCTRL, SDL_SCANCODE_S}, STOP_RECORDING);
+	input.bindChord({SDL_SCANCODE_LCTRL, SDL_SCANCODE_P}, PLAYBACK);
+
 
 
 
@@ -532,14 +559,14 @@ int main(int argc, char* argv[])
 
 	// The main game loop
 	while (running) {
-
-		renderObj(go, Vector{0, 0});
-
 		// std::cout << eventList.size() << std::endl;
 
 		// Time Line Update
 		timeline.update();
 		float d_time = timeline.getDeltaTime();
+
+		input.update();
+		eventManager.ProcessEvents(std::chrono::steady_clock::now().time_since_epoch().count());
 
 		{
 			std::lock_guard<std::mutex> lock(eventMutex);
@@ -577,49 +604,6 @@ int main(int argc, char* argv[])
 			// If the event is close the window
 			if (event.type == SDL_EVENT_QUIT)
 				running = false;
-
-			// Otherwise look for a key press
-			else if (event.type == SDL_EVENT_KEY_DOWN) {
-				// Testing to allow the keypress of "ESC" to exit the window.
-				if (isKeyPressed(SDL_SCANCODE_ESCAPE)) {								// Quit
-					running = false;
-				}
-
-				// Change Scaling Mode
-				if (isKeyPressed(SDL_SCANCODE_GRAVE)) {									// Change Scaling Mode
-					constantSizeScale = !constantSizeScale;
-				}
-
-				////////////////////////////////
-				//	Asyc
-				////////////////////////////////
-				// Slow down game
-				if (isKeyPressed(SDL_SCANCODE_COMMA)){
-					timeline.setTimeScale(0.5);
-				}
-				// Regular Speed
-				if (isKeyPressed(SDL_SCANCODE_PERIOD)) {
-					timeline.setTimeScale(1.0);
-				}
-				// Speed Up
-				if (isKeyPressed(SDL_SCANCODE_SLASH)) {
-					timeline.setTimeScale(2.0);
-				}
-				// Pause
-				if (isKeyPressed(SDL_SCANCODE_P)) {
-					//Unpause
-					if (isPaused) {
-						timeline.setTimeScale(1.0);
-						isPaused = false;
-					}
-					//Pause
-					else {
-						timeline.setTimeScale(0.0);
-						isPaused = true;
-					}
-					
-				}
-			}
 		}
 
 		//////////////////////////////////////////////////
@@ -637,77 +621,6 @@ int main(int argc, char* argv[])
 		// Player Movement
 		//
 		//////////////////////////////////////////////////
-		// Player Movement
-		Vector vel = player.getComponent<Vector>("velocity");
-		if (isKeyPressed(SDL_SCANCODE_W) || isKeyPressed(SDL_SCANCODE_SPACE)) {	// Jump
-			{
-				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), UP, myID);
-				eventManager.QueueEvent(inputEvent);
-
-				std::lock_guard<std::mutex> lock(networkEventMutex);
-				networkEvents[numNetworkEvents] = NetworkEvent {2, UP, myID, -1, -1, -1, inputEvent->timestamp};
-			}
-		}
-		if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
-			{
-				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), LEFT, myID);
-				eventManager.QueueEvent(inputEvent);
-
-				std::lock_guard<std::mutex> lock(networkEventMutex);
-				networkEvents[numNetworkEvents] = NetworkEvent {2, LEFT, myID, -1, -1, -1, inputEvent->timestamp};
-			}
-		}
-		if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
-			{
-				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), DOWN, myID);
-				eventManager.QueueEvent(inputEvent);
-
-				std::lock_guard<std::mutex> lock(networkEventMutex);
-				networkEvents[numNetworkEvents] = NetworkEvent {2, DOWN, myID, -1, -1, -1, inputEvent->timestamp};
-			}
-		}
-		if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
-			{
-				auto inputEvent = std::make_shared<InputEvent>(std::chrono::steady_clock::now().time_since_epoch().count(), RIGHT, myID);
-				eventManager.QueueEvent(inputEvent);
-
-				std::lock_guard<std::mutex> lock(networkEventMutex);
-				networkEvents[numNetworkEvents] = NetworkEvent {2, RIGHT, myID, -1, -1, -1, inputEvent->timestamp};
-			}
-		}
-
-		// std::cout << isKeyPressed(SDL_SCANCODE_1) << std::endl;
-
-		// Recording Input
-		if (isKeyPressed(SDL_SCANCODE_1)) {
-			
-			if (!justPressed1) {
-				justPressed1 = true;
-				//fire event for pressing
-				std::cout << "Pressed 1!" << std::endl;
-
-				auto startRecordEvent = std::make_shared<StartRecordingEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
-				eventManager.QueueEvent(startRecordEvent);
-			}
-			// fire events for holding			
-		}
-		else justPressed1 = false;
-
-		if (isKeyPressed(SDL_SCANCODE_2)) {
-			auto stopRecordEvent = std::make_shared<StopRecordingEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
-			eventManager.QueueEvent(stopRecordEvent);
-		}
-		if (isKeyPressed(SDL_SCANCODE_3)) {
-			if (!justPressed3) {
-				justPressed3 = true;
-
-				std::cout << "Pressed 3!" << std::endl;
-
-				auto startPlaybackEvent = std::make_shared<StartPlaybackEvent>(std::chrono::steady_clock::now().time_since_epoch().count());
-				eventManager.QueueEvent(startPlaybackEvent);
-			}
-		}
-		else justPressed3 = false;
 
 		// Add Gravity
 		Vector playerSpeed = player.getComponent<Vector>("velocity");
@@ -757,14 +670,10 @@ int main(int argc, char* argv[])
 				std::cout << "findGameObject Failed" << std::endl;
 			}
 
-		}
-		
-		
-		eventManager.ProcessEvents(std::chrono::steady_clock::now().time_since_epoch().count());
-		
+		}		
 
 		// Move player and then reset their velocity
-		updatePosition(player, isPaused);
+		updatePosition(player, false);
 		player.setComponent("velocity", Vector{0, 0});
 
 
@@ -780,11 +689,6 @@ int main(int argc, char* argv[])
 		refreshScreen(renderer);
 		
 		// std::cout << "Refresh, end of loop" << std::endl;
-
-		// {
-        //     std::lock_guard<std::mutex> lock(eventMutex);
-        //     eventList.clear();
-        // }
 	}
 
 	SDL_DestroyRenderer(renderer);

@@ -38,7 +38,7 @@ Vector player_Position = {400, 400};
 Vector player_dimensions;
 SDL_Texture* player_texture;
 Vector player_Velocity = {0, 0};
-float playerAcceleration = 5.0;
+float playerAcceleration = .5;
 float player_turnSpeed = 5;
 
 // Orb
@@ -49,6 +49,7 @@ Vector orb_dimensions;
 SDL_Texture* asteroid_texture_big;
 SDL_Texture* asteroid_texture_med;
 SDL_Texture* asteroid_texture_small;
+int asteroid_speed = 20;
 
 // Spawn Zones
 Vector spawnZone1_Position = {100, 100};
@@ -93,6 +94,8 @@ bool collidable(GameObject *a) {
 	return false;
 }
 
+
+
 void renderObj(GameObject *object, Vector offset) {
 	// Only Render Objects with Positions and Dimensions, and a color or texture
 	if (!object->hasComponent("position") || !object->hasComponent("dimensions")) {
@@ -107,8 +110,32 @@ void renderObj(GameObject *object, Vector offset) {
 
 	// Object has Texture
 	if (object->hasComponent("texture")) {
+		// AI USE DISCLOSURE, Gave ChatGPT a partially working render texture set of code, and asked
+		// it to add rotational locking knowing that some objects have a orientation component
 		SDL_Texture* tex = object->getComponent<SDL_Texture *>("texture");
-		SDL_RenderTexture(renderer, tex, NULL, &rectangle);
+
+		float orientDeg = 0.0f;
+		SDL_FPoint pivot = {0, 0};
+
+		// If rotating, compute pivot and angle
+		if (object->hasComponent("orientation")) {
+			float radians = object->getComponent<float>("orientation");
+			orientDeg = radians * (180.0f / M_PI);
+			pivot = { dim.x / 2.0f, dim.y / 2.0f };  // rotate around center
+		}
+
+		SDL_RenderTextureRotated(
+			renderer,
+			tex,
+			NULL,            // src = whole texture (IMPORTANT)
+			&rectangle,      // dst in world coordinates
+			orientDeg,
+			&pivot,          // center of rotation inside the texture
+			SDL_FLIP_NONE
+		);
+
+		return;
+		// AI USE END
 	}
 	// Object has Color
 	else if (object->hasComponent("color")) {
@@ -142,7 +169,9 @@ void spawnBullet(Ship_Bullet_Pool* bulletPool, std::vector<GameObject *> *object
 		std::lock_guard<std::mutex> lock(*objectMutex);
 
 		GameObject* gameObject = bulletPool->spawn();
-
+		gameObject->setComponent("texture", orb_texture);
+		gameObject->setComponent("dimensions", orb_dimensions);
+		
 		objectList->push_back(gameObject);
 	}
 }
@@ -153,8 +182,12 @@ void spawnAsteroid(GameObjectPool* asteroidPool, std::vector<GameObject *> *obje
 		std::lock_guard<std::mutex> lock(*objectMutex);
 
 		// TODO, add logic to spawn asteroid on edge of screen going
-
 		GameObject* gameObject = asteroidPool->spawn(Vector{400, 400}, Vector{0, 0});
+		gameObject->setComponent("texture", asteroid_texture_small);
+		gameObject->setComponent("dimensions", Vector {asteroid_texture_small->w, asteroid_texture_small->h});
+		gameObject->setComponent("isAsteroid", true);
+		gameObject->setComponent("position", Vector{rand() % (int)windowSize.x, rand() % (int)windowSize.y});
+		gameObject->setComponent("velocity", Vector{rand() % asteroid_speed, rand() % asteroid_speed});
 
 		objectList->push_back(gameObject);
 	}
@@ -217,9 +250,12 @@ int main(int argc, char* argv[])
 	orb_texture = IMG_LoadTexture(renderer, "../media/darkworld_spawn_swirlingorb.png");
 	texCheck(orb_texture);
 
-	asteroid_texture_big = IMG_LoadTexture(renderer, "../media/Card_256.png");
-	asteroid_texture_med = IMG_LoadTexture(renderer, "../media/Card_128.png");
-	asteroid_texture_small = IMG_LoadTexture(renderer, "../media/Card_64.png");
+	asteroid_texture_big = IMG_LoadTexture(renderer, "../media/Card_256.jpg");
+	asteroid_texture_med = IMG_LoadTexture(renderer, "../media/Card_128.jpg");
+	asteroid_texture_small = IMG_LoadTexture(renderer, "../media/Card_64.jpg");
+	texCheck(asteroid_texture_big);
+	texCheck(asteroid_texture_med);
+	texCheck(asteroid_texture_small);
 
 
 
@@ -240,7 +276,7 @@ int main(int argc, char* argv[])
 	GameObject player = GameObject();
 	player.setComponent("position", player_Position);
 	player.setComponent("starting_pos", player_Position);
-	player.setComponent("orientation", 0);
+	player.setComponent("orientation", 0.0f);
     player.setComponent("id", 0);
 	player.setComponent("velocity", Vector{0, 0});
 	player.setComponent("dimensions", player_dimensions);
@@ -262,8 +298,8 @@ int main(int argc, char* argv[])
 	////////////////////
 	//`Pool Setup
 	////////////////////
-	Ship_Bullet_Pool *player_bullet_pool = new Ship_Bullet_Pool(sizeof(GameObject), 100, &player);
-	GameObjectPool *asteroid_pool = new GameObjectPool(sizeof(GameObject), 20, &player, Vector{0, 0});
+	Ship_Bullet_Pool *player_bullet_pool = new Ship_Bullet_Pool(sizeof(GameObject), 100, &player, &objects, &objectMutex);
+	GameObjectPool *asteroid_pool = new GameObjectPool(sizeof(GameObject), 5, &player, Vector{100, 100});
 
 	////////////////////
 	//`Event Setup
@@ -281,24 +317,24 @@ int main(int argc, char* argv[])
 		Vector playerPos = player.getComponent<Vector>("position");
 		float playerRad = player.getComponent<float>("orientation");
 
-		Vector playerOrient{cos(playerRad), sin(playerRad)};
+		Vector playerOrient{ cos(playerRad - M_PI/2), sin(playerRad - M_PI/2) };
 
 		// TODO: Account for orientation overflow
 		switch (input.action) {
 			case FORWARD:
-				player.setComponent("velocity", vectorAdd(playerVel, Vector{playerOrient.x * playerAcceleration * timeline.getDeltaTime(), playerOrient.y * playerAcceleration * timeline.getDeltaTime()}));
+				player.setComponent("velocity", vectorAdd(playerVel, Vector{playerOrient.x * playerAcceleration, playerOrient.y * playerAcceleration}));
 				break; 
 
 			case BACK:
-				player.setComponent("velocity", vectorSub(playerVel, Vector{playerOrient.x * playerAcceleration * timeline.getDeltaTime(), playerOrient.y * playerAcceleration * timeline.getDeltaTime()}));
+				player.setComponent("velocity", vectorSub(playerVel, Vector{playerOrient.x * playerAcceleration, playerOrient.y * playerAcceleration}));
 				break;
 
 			case TURN_LEFT:
-				player.setComponent("orientation", playerRad + player_turnSpeed * timeline.getDeltaTime());
+				player.setComponent("orientation", playerRad - player_turnSpeed * timeline.getDeltaTime());
 				break;
 
 			case TURN_RIGHT:
-				player.setComponent("orientation", playerRad - player_turnSpeed * timeline.getDeltaTime());
+				player.setComponent("orientation", playerRad + player_turnSpeed * timeline.getDeltaTime());
 				break;
 				
 			case SHOOT:
@@ -311,7 +347,7 @@ int main(int argc, char* argv[])
 	///////////////////////
 	//	Input
 	///////////////////////
-	InputManager input(eventManager);
+	InputManager input(eventManager, 0);
 	
 	// Binding Input
 
@@ -392,7 +428,7 @@ int main(int argc, char* argv[])
 		// Gameplay Updates
 		//
 		//////////////////////////////////////////////////		
-		if (asteroid_pool->getActiveCount() < asteroid_pool->getCapacity() && timeline.getElapsedTicks() - time_since_spawn > 5) {
+		if (asteroid_pool->getActiveCount() < asteroid_pool->getCapacity() && timeline.getElapsedTicks() - time_since_spawn > 20) {
 
 			spawnAsteroid(asteroid_pool, &objects, &objectMutex);
 			time_since_spawn = timeline.getElapsedTicks();
@@ -407,26 +443,20 @@ int main(int argc, char* argv[])
 		// Player Movement
 		//
 		//////////////////////////////////////////////////
-		// Player Movement
-		// Vector vel = player.getComponent<Vector>("velocity");
-		// if (isKeyPressed(SDL_SCANCODE_W)) {	// Jump
-        //     // Move Up
-        //     vel = vectorAdd(vel, Vector{0, -playerSpeed * d_time});
-		// }
-		// if (isKeyPressed(SDL_SCANCODE_A)) {										// Left
-		// 	// Move Left
-        //     vel = vectorAdd(vel, Vector{-playerSpeed * d_time, 0});
-		// }
-		// if (isKeyPressed(SDL_SCANCODE_S)) {										// Down
-		// 	// Move Down
-        //     vel = vectorAdd(vel, Vector{0, playerSpeed * d_time});
-		// }
-		// if (isKeyPressed(SDL_SCANCODE_D)) {										// Right
-		// 	// Move Right
-        //     vel = vectorAdd(vel, Vector{playerSpeed * d_time, 0});
-		// }
+		// Restrain Player to window
+		{
+			std::lock_guard<std::mutex> lock(objectMutex);
 
-        // player.setComponent("velocity", vel);
+			Vector pos = player.getComponent<Vector>("position");
+
+			if (pos.x > windowSize.x) pos.x = 0;
+			if (pos.y > windowSize.y) pos.y = 0;
+
+			if (pos.x < 0) pos.x = windowSize.x;
+			if (pos.y < 0) pos.y = windowSize.y;
+
+			player.setComponent("position", pos);
+		}
 
 
 		//////////////////////////////////////////////////
@@ -434,15 +464,57 @@ int main(int argc, char* argv[])
 		// Collisions
 		//
 		//////////////////////////////////////////////////
-		// if (overlappingColliders1(player, bullet_spawner)) {
-		// 	running = false;
-		// }
+		
+		// Check if any asteroid is interacting with any bullet
+		for (auto object1 : objects) {
+			if (object1->hasComponent("isAsteroid")) {
+
+				{
+					std::lock_guard<std::mutex> lock(objectMutex);
+					
+					Vector pos = object1->getComponent<Vector>("position");
+
+					if (pos.x > windowSize.x) pos.x = 0;
+					if (pos.y > windowSize.y) pos.y = 0;
+
+					if (pos.x < 0) pos.x = windowSize.x;
+					if (pos.y < 0) pos.y = windowSize.y;
+
+					object1->setComponent("position", pos);
+				}
+
+				// Object 1 is bullet
+				for (auto object2 : objects) {
+					if (object2->hasComponent("isBullet")) {
+						// Object 2 is asteroid, check if overlapping
+						if (overlappingColliders1(*object1, *object2)) {
+							// change position and velocity randomly
+							{
+								std::lock_guard<std::mutex> lock(objectMutex);
+
+								object1->setComponent("position", Vector{rand() % (int)windowSize.x, rand() % (int)windowSize.y});
+								object1->setComponent("velocity", Vector{rand() % asteroid_speed, rand() % asteroid_speed});
+
+								
+							}
+							
+						}
+					}
+				}
+			}
+		}
 		
 				
 
 		// Move player and then reset their velocity
-		updatePosition(player, isPaused);
-		player.setComponent("velocity", Vector{0, 0});
+		{
+			std::lock_guard<std::mutex> lock(objectMutex);
+
+			Vector pos = player.getComponent<Vector>("position");
+			Vector vel = player.getComponent<Vector>("velocity");
+
+			player.setComponent("position", Vector{pos.x + (vel.x * timeline.getDeltaTime()), pos.y + (vel.y * timeline.getDeltaTime())});
+		}
 
 
 
